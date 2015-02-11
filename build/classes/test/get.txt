@@ -1,0 +1,2 @@
+IN GET TEXT
+IT WORKS !!!!
