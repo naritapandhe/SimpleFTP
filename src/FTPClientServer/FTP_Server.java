@@ -9,7 +9,7 @@ import java.io.*;
 import java.util.ArrayList;
 
 //Server Class
-public class FTP_Server {
+public class FTP_Server extends Thread {
 
     /**
      * Declaring the required variables
@@ -42,13 +42,18 @@ public class FTP_Server {
     //Default Constructor
     FTP_Server(int serverPortNo) {
 
+        super();
+        System.out.println("Thread started..!!!");
+        start();
+
         try {
+
 
             serverPort = serverPortNo;
             serverSocket = new ServerSocket(serverPort);
 
             System.out.println("Server Running!!!!");
-            System.out.println("Please connect to the Server from Client using "+ serverPort +" port.");
+            System.out.println("Please connect to the Server from Client using " + serverPort + " port.");
 
         } catch (Exception e) {
             System.out.println(e.getMessage());
@@ -106,8 +111,8 @@ public class FTP_Server {
                 this.clientFileContents = clientInput[2];
 
             }
-            System.out.println("\n\nCommand received from Client: '"+this.clientCommand+"'");
-            System.out.println("Parameters received from Client: '"+this.clientParams+"'");
+            System.out.println("\n\nCommand received from Client: '" + this.clientCommand + "'");
+            System.out.println("Parameters received from Client: '" + this.clientParams + "'");
 
 
 
@@ -269,26 +274,26 @@ public class FTP_Server {
      */
     public String executeCd(String dirName) {
         System.out.println("Executing cd...");
-        String result=null;
+        String result = null;
         // If 'cd ..' command is to be exceuted, then point the working directory to parent
         if (dirName.equals("..")) {
             File fileObj = new File(System.getProperty("user.dir"));
             System.setProperty("user.dir", fileObj.getAbsoluteFile().getParent());
-            result="Directory changed to: " + System.getProperty("user.dir");
+            result = "Directory changed to: " + System.getProperty("user.dir");
 
         } else {
 
             //If 'cd xxxx' is to be executed, then point to the directory name mentionsd
             File dirObj = new File(dirName);
-            if(dirObj.exists()){
-            System.setProperty("user.dir", dirObj.getAbsolutePath());
-            result="Directory changed to: " + System.getProperty("user.dir");
-            }else{
+            if (dirObj.exists()) {
+                System.setProperty("user.dir", dirObj.getAbsolutePath());
+                result = "Directory changed to: " + System.getProperty("user.dir");
+            } else {
                 result = "Directory not be found!!! Please try again";
             }
 
         }
-        
+
 
         //Return the new working directory
         return result;
@@ -350,7 +355,7 @@ public class FTP_Server {
         try {
 
             FileOutputStream fileOutputStreamObject = new FileOutputStream(new File(System.getProperty("user.dir") + "/" + fileName));
-            byte[] fileBytes= new byte[1024 * 1024];
+            byte[] fileBytes = new byte[1024 * 1024];
 
             /**
              * Create a file on the Server
@@ -368,7 +373,7 @@ public class FTP_Server {
             fileOutputStreamObject.close();
 
         } catch (Exception e) {
-            result="Some error occurred!!!Please try again";
+            result = "Some error occurred!!!Please try again";
             //e.printStackTrace();
         }
         return result;
@@ -382,26 +387,26 @@ public class FTP_Server {
 
         try {
 
-            String result=null;
+            String result = null;
             System.out.println("Executing get...");
-            File fileObj=new File(fileName);
+            File fileObj = new File(fileName);
 
-            if(fileObj.exists()){
-            FileInputStream fileInputStreamObj = new FileInputStream(fileName);
-            
-            byte[] fileBytes = new byte[1024 * 1024];
+            if (fileObj.exists()) {
+                FileInputStream fileInputStreamObj = new FileInputStream(fileName);
 
-            //Read the contents of a file in a buffer and send it to Client
-            fileInputStreamObj.read(fileBytes);
+                byte[] fileBytes = new byte[1024 * 1024];
 
-            //Send the contents of file to Client
-            this.clientOutputObj.writeObject(fileBytes);
+                //Read the contents of a file in a buffer and send it to Client
+                fileInputStreamObj.read(fileBytes);
 
-            //Flush the stream
-            this.clientOutputObj.flush();
-            }else {
-                
-                result="File not found!!!Please try again.";
+                //Send the contents of file to Client
+                this.clientOutputObj.writeObject(fileBytes);
+
+                //Flush the stream
+                this.clientOutputObj.flush();
+            } else {
+
+                result = "File not found!!!Please try again.";
                 this.clientOutputObj.writeObject(result);
 
 
@@ -415,10 +420,7 @@ public class FTP_Server {
 
     }
 
-    //Main()
-    public static void main(String args[]) {
-        FTP_Server serverObject=new FTP_Server(Integer.parseInt(args[0]));
-
+    public void run(FTP_Server serverObject) {
         try {
             while (true) {
 
@@ -429,6 +431,58 @@ public class FTP_Server {
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    public void run()
+   {  while (thread != null)
+      {   try
+         {  System.out.println("Waiting for a client ...");
+            socket = server.accept();
+            System.out.println("Client accepted: " + socket);
+            open();
+            boolean done = false;
+            while (!done)
+            {  try
+               {  String line = streamIn.readUTF();
+                  System.out.println(line);
+                  done = line.equals(".bye");
+               }
+               catch(IOException ioe)
+               {  done = true;  }
+            }
+            close();
+         }
+         catch(IOException ie)
+         {  System.out.println("Acceptance Error: " + ie);  }
+      }
+   }
+   public void start()
+   {  if (thread == null)
+      {  thread = new Thread(this);
+         thread.start();
+      }
+   }
+   public void stop()
+   {  if (thread != null)
+      {  thread.stop();
+         thread = null;
+      }
+   }
+
+    //Main()
+    public static void main(String args[]) {
+        FTP_Server serverObject = new FTP_Server(Integer.parseInt(args[0]));
+
+        try {
+            while (serverObject.isAlive()) {
+                System.out.println("Server thread will be alive till not interrupted");
+                Thread.sleep(1500);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        System.out.println("Server thread exited!!");
+
 
     }
 }
