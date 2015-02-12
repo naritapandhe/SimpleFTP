@@ -132,9 +132,8 @@ public class FTP_Client {
             try {
 
                
-                //Connect to the Server
-                this.clientSocket = new Socket(serverAddress, serverPort);
-		this.outputStreamObj= new ObjectOutputStream(this.clientSocket.getOutputStream());
+                
+                this.outputStreamObj= new ObjectOutputStream(this.clientSocket.getOutputStream());
 
                 //Switch if its a valid command
 		Commands currentCommand = Commands.valueOf((String)this.commandSplitArray[0]);
@@ -272,7 +271,7 @@ public class FTP_Client {
 
          try{
                 this.inputStreamObj = new ObjectInputStream(this.clientSocket.getInputStream());
-
+                
                 //Switch if its a valid command
 		Commands currentCommand = Commands.valueOf((String)this.commandSplitArray[0]);
 
@@ -351,13 +350,19 @@ public class FTP_Client {
             try
             {
 		FTP_Client client=new FTP_Client(args[0],Integer.parseInt(args[1]));
+
+                
+                //Connect to the Server
+                client.clientSocket = new Socket(args[0],Integer.parseInt(args[1]));
+                System.out.println("Connecting to the server!!!!");
                 
                 while(true){
                     client.displayCommandsToUser();
                     client.readCommandFromUser();
 
                     if(client.commandSplitArray[0].toString().equalsIgnoreCase("quit")){
-                        
+
+                          client.clientSocket.close();
                           client.printStream("Disconnecting from the Server.....",true);
                           System.exit(0);
 				

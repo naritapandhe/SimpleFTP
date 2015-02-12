@@ -1,0 +1,5 @@
+src/FTPClientServer/*.class
+build/
+nbproject/
+src/manifest.mf
+dist/

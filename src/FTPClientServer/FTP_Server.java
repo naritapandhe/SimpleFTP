@@ -23,6 +23,7 @@ public class FTP_Server extends Thread {
     Object clientFileContents;
     ObjectOutputStream clientOutputObj = null;
     ObjectInputStream inputStreamObj = null;
+    Thread testThread = null;
 
     /**
      * Enumeration of all the allowed commands.
@@ -43,8 +44,7 @@ public class FTP_Server extends Thread {
     FTP_Server(int serverPortNo) {
 
         super();
-        System.out.println("Thread started..!!!");
-        start();
+
 
         try {
 
@@ -54,6 +54,7 @@ public class FTP_Server extends Thread {
 
             System.out.println("Server Running!!!!");
             System.out.println("Please connect to the Server from Client using " + serverPort + " port.");
+
 
         } catch (Exception e) {
             System.out.println(e.getMessage());
@@ -116,7 +117,20 @@ public class FTP_Server extends Thread {
 
 
 
-        } catch (Exception e) {
+        }catch (EOFException e) {
+           this.testThread.interrupt();
+           System.out.println("Client quit!!");
+               System.out.println(this.testThread.getState());
+               if(this.testThread.isInterrupted()){
+                   try{
+                       this.testThread.join(100);
+                       System.out.println("Thread join executed.");
+                   }catch(InterruptedException ie){
+                       System.out.println(this.testThread.getState());
+                   }
+            }
+               
+        }catch (Exception e) {
             e.printStackTrace();
         }
 
@@ -130,6 +144,7 @@ public class FTP_Server extends Thread {
     public void validateAndExecuteCommand() {
         try {
             String commandResult = null;
+            String threadID="\nThread ID: "+Long.toString(this.testThread.getId())+"\n";
             ArrayList<String> lsResult = new ArrayList<String>();
             this.clientOutputObj = new ObjectOutputStream(this.clientSocket.getOutputStream());
             Commands currentCommand = Commands.valueOf(this.clientCommand);
@@ -139,30 +154,36 @@ public class FTP_Server extends Thread {
 
                 case ls:
                     lsResult = this.executeLs();
+                    lsResult.add(threadID+"\t");
                     this.clientOutputObj.writeObject(lsResult);
                     break;
 
                 case pwd:
-                    commandResult = this.executePwd();
+                    commandResult=threadID;
+                    commandResult+= this.executePwd();
                     this.clientOutputObj.writeObject(commandResult);
                     break;
 
                 case mkdir:
-                    commandResult = this.executeMkdir((String) this.clientParams);
+                    commandResult=threadID;
+                    commandResult+= this.executeMkdir((String) this.clientParams);
                     this.clientOutputObj.writeObject(commandResult);
                     break;
 
                 case cd:
-                    commandResult = this.executeCd((String) this.clientParams);
+                    commandResult=threadID;
+                    commandResult+= this.executeCd((String) this.clientParams);
                     this.clientOutputObj.writeObject(commandResult);
                     break;
 
                 case delete:
-                    commandResult = this.executeDelete((String) this.clientParams);
+                    commandResult=threadID;
+                    commandResult+= this.executeDelete((String) this.clientParams);
                     this.clientOutputObj.writeObject(commandResult);
                     break;
 
                 case put:
+                    commandResult=threadID;
                     commandResult = this.executePut((String) this.clientParams, this.clientFileContents);
                     this.clientOutputObj.writeObject(commandResult);
                     break;
@@ -420,69 +441,59 @@ public class FTP_Server extends Thread {
 
     }
 
-    public void run(FTP_Server serverObject) {
-        try {
-            while (true) {
+    /*public void run(FTP_Server serverObject) {
+    try {
+    while (true) {
 
-                serverObject.clientSocket = serverSocket.accept();
-                serverObject.readCommandFromClient();
-                serverObject.validateAndExecuteCommand();
+    serverObject.clientSocket = serverSocket.accept();
+    serverObject.readCommandFromClient();
+    serverObject.validateAndExecuteCommand();
+    }
+    } catch (Exception e) {
+    e.printStackTrace();
+    }
+    }*/
+    public void run() {
+        try {
+            
+            while (this.testThread != null) {
+                this.readCommandFromClient();
+                this.validateAndExecuteCommand();
+
             }
+            
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-    public void run()
-   {  while (thread != null)
-      {   try
-         {  System.out.println("Waiting for a client ...");
-            socket = server.accept();
-            System.out.println("Client accepted: " + socket);
-            open();
-            boolean done = false;
-            while (!done)
-            {  try
-               {  String line = streamIn.readUTF();
-                  System.out.println(line);
-                  done = line.equals(".bye");
-               }
-               catch(IOException ioe)
-               {  done = true;  }
-            }
-            close();
-         }
-         catch(IOException ie)
-         {  System.out.println("Acceptance Error: " + ie);  }
-      }
-   }
-   public void start()
-   {  if (thread == null)
-      {  thread = new Thread(this);
-         thread.start();
-      }
-   }
-   public void stop()
-   {  if (thread != null)
-      {  thread.stop();
-         thread = null;
-      }
-   }
+    public void start() {
+        if (this.testThread == null) {
+            this.testThread = new Thread(this);
+            this.testThread.start();
+        }else if(this.testThread!=null){
+             this.testThread.run();
+        }
+    }
 
     //Main()
     public static void main(String args[]) {
         FTP_Server serverObject = new FTP_Server(Integer.parseInt(args[0]));
 
         try {
-            while (serverObject.isAlive()) {
-                System.out.println("Server thread will be alive till not interrupted");
-                Thread.sleep(1500);
+            while (true) {
+
+                serverObject.clientSocket = serverSocket.accept();
+
+                System.out.println("Client accepted: " + serverObject.clientSocket);
+
+                serverObject.start();
+                
             }
+            
         } catch (Exception e) {
             e.printStackTrace();
         }
-        System.out.println("Server thread exited!!");
-
 
     }
 }
