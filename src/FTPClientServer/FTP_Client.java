@@ -230,30 +230,57 @@ public class FTP_Client {
          * Function to download a file from the Server
          * 
          */
-        public void downloadFromServer(Object originalFile ,String destinationFileName){
+        public void downloadFromServer(ObjectInputStream inputStreamObj ,String destinationFileName){
         String result=null;
         try{
 
-            if(originalFile instanceof byte[]){
+            Object test=inputStreamObj.readObject();
+            if(test instanceof byte[]){
+
             File fileObject=new File(destinationFileName);
 
             //Create a file
             FileOutputStream fileOutputStreamObject = new FileOutputStream(new File(System.getProperty("user.dir")+"/"+fileObject.getName()));
 
+           
+            System.out.println(test.toString());
+            int count=test.toString().length();
+            while(  count>0 ) {
+
+                byte[] fileBytes = new byte[1024*1024];
+                fileBytes = (byte[])test;
+
+                //Write the contents to the file
+                fileOutputStreamObject.write(fileBytes,0,1024*1024);
+
+                count-=test.toString().length();
+    
+
+            }
+
+            
+            
             //Read the received contents
-            byte[] fileBytes = new byte[1024*1024];
+            /*byte[] fileBytes = new byte[1024*1024];
             fileBytes = (byte[])originalFile;
 
             //Write the contents to the file
-            fileOutputStreamObject.write(fileBytes,0,1024*1024);
+            fileOutputStreamObject.write(fileBytes,0,1024*1024);*/
 
             //Close the stream
-            fileOutputStreamObject.close();
+            fileOutputStreamObject.flush();
+            
 
             this.printStream("File received successfully!!!",true);
+
             }else{
-                this.printStream(originalFile.toString(),true);
+                this.printStream(inputStreamObj.readObject().toString(),true);
             }
+
+
+            
+            
+      
 
         }catch(Exception e){
             e.printStackTrace();
@@ -285,7 +312,7 @@ public class FTP_Client {
                     case ls:  this.parseLsResponse(this.inputStreamObj);
                               break;
 
-                    case get: this.downloadFromServer(this.inputStreamObj.readObject(),(String)this.commandSplitArray[1]);
+                    case get: this.downloadFromServer(this.inputStreamObj,(String)this.commandSplitArray[1]);
                               break;
 
                     default:  this.printStream(this.inputStreamObj.readObject().toString(),true);

@@ -357,6 +357,7 @@ public class FTP_Server extends Thread {
             FileOutputStream fileOutputStreamObject = new FileOutputStream(new File(System.getProperty("user.dir") + "/" + fileName));
             byte[] fileBytes = new byte[1024 * 1024];
 
+
             /**
              * Create a file on the Server
              * Write the contents sent by Client, in that file
@@ -372,6 +373,12 @@ public class FTP_Server extends Thread {
             //Close the stream
             fileOutputStreamObject.close();
 
+            
+
+
+
+            
+
         } catch (Exception e) {
             result = "Some error occurred!!!Please try again";
             //e.printStackTrace();
@@ -381,6 +388,7 @@ public class FTP_Server extends Thread {
 
     /**
      * Function to execute the 'get' command
+     * i.e. Send to Client
      * @String fileName
      */
     public void executeGet(String fileName) {
@@ -393,17 +401,31 @@ public class FTP_Server extends Thread {
 
             if (fileObj.exists()) {
                 FileInputStream fileInputStreamObj = new FileInputStream(fileName);
+                int counter = 0;//used to track progress through upload
+
 
                 byte[] fileBytes = new byte[1024 * 1024];
 
                 //Read the contents of a file in a buffer and send it to Client
-                fileInputStreamObj.read(fileBytes);
+                int retVal=fileInputStreamObj.read(fileBytes);
+                      
+                while(retVal!=-1){
+                    
+                    //Send the contents of file to Client
+                    this.clientOutputObj.writeObject(fileBytes);
 
-                //Send the contents of file to Client
-                this.clientOutputObj.writeObject(fileBytes);
+                    this.clientOutputObj.reset();
 
-                //Flush the stream
-                this.clientOutputObj.flush();
+                    //Flush the stream
+                    this.clientOutputObj.flush();
+
+                    retVal = fileInputStreamObj.read(fileBytes);
+
+                }
+                //this.clientOutputObj.writeObject("CONTENTS_TRANSFERRED");
+               // this.clientOutputObj.close();
+
+
             } else {
 
                 result = "File not found!!!Please try again.";
