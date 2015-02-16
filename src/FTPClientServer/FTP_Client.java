@@ -5,6 +5,7 @@ package FTPClientServer;
  * Required imports
  *
  */
+import com.mysql.jdbc.StringUtils;
 import java.io.*;
 import java.net.*;
 import java.util.ArrayList;
@@ -17,14 +18,22 @@ public class FTP_Client {
          *
          */
 	static String serverAddress;
-	static int serverPort;
-	Socket clientSocket;
+	static int serverNormalPort;
+        static int serverTerminatePort;
+
+        Socket clientNormalPortSocket;
+        Socket clientTerminatePortSocket;
+
 	String inputCommand;
         Object[] commandSplitArray = new Object[5];
+
         ObjectOutputStream outputStreamObj=null;
         ObjectInputStream inputStreamObj=null;
         
-	/**
+	ObjectOutputStream terminateOutputStreamObj=null;
+        ObjectInputStream terminateiInputStreamObj=null;
+
+        /**
 	 * Enumeration of all the allowed commands.
 	 *
 	 */
@@ -41,10 +50,12 @@ public class FTP_Client {
 	};
 
         //Default Client's constructor
-	FTP_Client(String serverAddressParm, int serverPortParm) {
+	FTP_Client(String serverAddressParm, int serverNormalPortParm, int serverTerminatePortParm) {
 
 		serverAddress = serverAddressParm;
-		serverPort = serverPortParm;
+		serverNormalPort = serverNormalPortParm;
+                serverTerminatePort = serverTerminatePortParm;
+
 	}
 
 
@@ -133,7 +144,7 @@ public class FTP_Client {
 
                
                 
-                this.outputStreamObj= new ObjectOutputStream(this.clientSocket.getOutputStream());
+                this.outputStreamObj= new ObjectOutputStream(this.clientNormalPortSocket.getOutputStream());
 
                 //Switch if its a valid command
 		Commands currentCommand = Commands.valueOf((String)this.commandSplitArray[0]);
@@ -234,52 +245,87 @@ public class FTP_Client {
         String result=null;
         try{
 
-            Object test=inputStreamObj.readObject();
-            if(test instanceof byte[]){
 
+            //System.out.println("size: "+inputStreamObj.available());
+            Object test=inputStreamObj.readObject();
+            if(test instanceof String){
+                
+                    this.printStream(test.toString(),true);
+                    return;
+                
+            }
+
+
+            int FIXED_BUFFER_SIZE=10;
+            byte[] fileBytes = null;
             File fileObject=new File(destinationFileName);
+            boolean isFileRecieved=false;
+            boolean isCommandIDRecieved=false;
 
             //Create a file
             FileOutputStream fileOutputStreamObject = new FileOutputStream(new File(System.getProperty("user.dir")+"/"+fileObject.getName()));
 
-           
-            System.out.println(test.toString());
-            int count=test.toString().length();
-            while(  count>0 ) {
 
-                byte[] fileBytes = new byte[1024*1024];
-                fileBytes = (byte[])test;
+            while(true && !isFileRecieved){
 
-                //Write the contents to the file
-                fileOutputStreamObject.write(fileBytes,0,1024*1024);
+                if(!isCommandIDRecieved){
 
-                count-=test.toString().length();
-    
+                    fileBytes=(byte[])test;
+                    String s = new String(fileBytes);
+                    this.printStream(s,true);
+                    isCommandIDRecieved=true;
 
+
+                }else{
+
+                     if(((byte[])test).length==FIXED_BUFFER_SIZE){
+                        fileBytes=new byte[FIXED_BUFFER_SIZE];
+                     } else {
+                         fileBytes=new byte[((byte[])test).length];
+                         isFileRecieved=true;
+                         
+
+                     }
+                    fileBytes=(byte[])test;
+
+                     //Write the contents to the file
+                    fileOutputStreamObject.write(fileBytes);
+
+                    //Close the stream
+                    fileOutputStreamObject.flush();
+
+                    if(isFileRecieved){
+                        this.printStream("File received successfully!!!",true);
+                        return;
+                    }
+
+                   
+                    
+                    
+                }
+                BufferedReader br=new BufferedReader(new InputStreamReader(System.in));
+                this.printStream("Do you want to quit? (1(Yes) / 0(No))", true);
+                String answer=br.readLine();
+                if(answer.equals("1")){
+                       byte[] responseBytes = answer.getBytes();
+
+                       this.terminateOutputStreamObj= new ObjectOutputStream(this.clientTerminatePortSocket.getOutputStream());
+                       this.terminateOutputStreamObj.writeObject(responseBytes);
+                       System.out.println("Sending terminate signal on terminate port");
+                       
+                       //Flush the stream
+                       this.terminateOutputStreamObj.flush();
+                       this.printStream("Terminate signal sent....", true);
+                       return;
+
+                }
+                test=inputStreamObj.readObject();
+                 
             }
+               
 
-            
-            
-            //Read the received contents
-            /*byte[] fileBytes = new byte[1024*1024];
-            fileBytes = (byte[])originalFile;
+               
 
-            //Write the contents to the file
-            fileOutputStreamObject.write(fileBytes,0,1024*1024);*/
-
-            //Close the stream
-            fileOutputStreamObject.flush();
-            
-
-            this.printStream("File received successfully!!!",true);
-
-            }else{
-                this.printStream(inputStreamObj.readObject().toString(),true);
-            }
-
-
-            
-            
       
 
         }catch(Exception e){
@@ -297,7 +343,7 @@ public class FTP_Client {
         public void processServerResponse(){
 
          try{
-                this.inputStreamObj = new ObjectInputStream(this.clientSocket.getInputStream());
+                this.inputStreamObj = new ObjectInputStream(this.clientNormalPortSocket.getInputStream());
                 
                 //Switch if its a valid command
 		Commands currentCommand = Commands.valueOf((String)this.commandSplitArray[0]);
@@ -376,11 +422,13 @@ public class FTP_Client {
 
             try
             {
-		FTP_Client client=new FTP_Client(args[0],Integer.parseInt(args[1]));
+		FTP_Client client=new FTP_Client(args[0],Integer.parseInt(args[1]),Integer.parseInt(args[2]));
 
                 
-                //Connect to the Server
-                client.clientSocket = new Socket(args[0],Integer.parseInt(args[1]));
+                //Connect to the Server on Normal Port
+                client.clientNormalPortSocket = new Socket(client.serverAddress,client.serverNormalPort);
+
+                client.clientTerminatePortSocket = new Socket(client.serverAddress,client.serverTerminatePort);
                 System.out.println("Connecting to the server!!!!");
                 
                 while(true){
@@ -389,8 +437,9 @@ public class FTP_Client {
 
                     if(client.commandSplitArray[0].toString().equalsIgnoreCase("quit")){
 
-                          client.clientSocket.close();
-                          client.printStream("Disconnecting from the Server.....",true);
+                          client.clientNormalPortSocket.close();
+                          client.clientTerminatePortSocket.close();
+                          client.printStream("Disconnected from the Server.....",true);
                           System.exit(0);
 				
                     }else{

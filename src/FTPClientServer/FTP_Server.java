@@ -15,14 +15,31 @@ public class FTP_Server extends Thread {
      * Declaring the required variables
      *
      */
-    static int serverPort;
-    Socket clientSocket;
-    static ServerSocket serverSocket;
+//    static int serverPort;
+//    Socket clientSocket;
+//    static ServerSocket serverSocket;
+
+    static int normalPort;
+    static int terminatePort;
+
+    Socket clientNormalPortSocket;
+    Socket clientTerminatePortSocket;
+
+    static ServerSocket serverNormalPortSocket;
+    static ServerSocket serverTerminatePortSocket;
+
+
+
     String clientCommand;
     Object clientParams;
     Object clientFileContents;
+
     ObjectOutputStream clientOutputObj = null;
     ObjectInputStream inputStreamObj = null;
+
+    ObjectOutputStream terminateClientOutputObj = null;
+    ObjectInputStream terminateInputStreamObj = null;
+
     Thread testThread = null;
 
     /**
@@ -40,10 +57,11 @@ public class FTP_Server extends Thread {
         cd
     };
 
-    FTP_Server(Socket clientSocket) {
+    FTP_Server(Socket clientNormalPortSocket,Socket clientTerminatePortSocket) {
         
         super("FTP_Server");
-        this.clientSocket=clientSocket;
+        this.clientNormalPortSocket=clientNormalPortSocket;
+        this.clientTerminatePortSocket=clientTerminatePortSocket;
 
     }
 
@@ -55,7 +73,7 @@ public class FTP_Server extends Thread {
     public void readCommandFromClient() {
         try {
 
-            this.inputStreamObj = new ObjectInputStream(this.clientSocket.getInputStream());
+            this.inputStreamObj = new ObjectInputStream(this.clientNormalPortSocket.getInputStream());
             Object inputObj = this.inputStreamObj.readObject();
 
             /**
@@ -125,7 +143,8 @@ public class FTP_Server extends Thread {
             String commandResult = null;
             String threadID="\nThread ID: "+Long.toString(Thread.currentThread().getId())+"\n";
             ArrayList<String> lsResult = new ArrayList<String>();
-            this.clientOutputObj = new ObjectOutputStream(this.clientSocket.getOutputStream());
+
+            this.clientOutputObj = new ObjectOutputStream(this.clientNormalPortSocket.getOutputStream());
             Commands currentCommand = Commands.valueOf(this.clientCommand);
 
             //Switch based on the command to be executed
@@ -394,37 +413,92 @@ public class FTP_Server extends Thread {
     public void executeGet(String fileName) {
 
         try {
+            int FIXED_BUFFER_SIZE=10;
+            String GET_COMMAND_ID="1";
 
+            boolean commandIDSent=false;
             String result = null;
             System.out.println("Executing get...");
             File fileObj = new File(fileName);
+            
+            int iteration=1;
+            boolean isFileSent=false;
+
 
             if (fileObj.exists()) {
+
+                
                 FileInputStream fileInputStreamObj = new FileInputStream(fileName);
                 int counter = 0;//used to track progress through upload
+                int fsize=(int)fileInputStreamObj.getChannel().size();
 
 
-                byte[] fileBytes = new byte[1024 * 1024];
+                byte[] fileBytes = new byte[FIXED_BUFFER_SIZE];
 
                 //Read the contents of a file in a buffer and send it to Client
-                int retVal=fileInputStreamObj.read(fileBytes);
-                      
-                while(retVal!=-1){
-                    
-                    //Send the contents of file to Client
-                    this.clientOutputObj.writeObject(fileBytes);
+                while(true && !isFileSent){
+                    if(!commandIDSent){
 
-                    this.clientOutputObj.reset();
+                        String threadID=Long.toString(Thread.currentThread().getId());
+                        String commandID=threadID+"_"+GET_COMMAND_ID;
 
-                    //Flush the stream
-                    this.clientOutputObj.flush();
+                        result = "CommandID:"+commandID;
+                        fileBytes = result.getBytes("UTF-8");
+                        this.clientOutputObj.writeObject(fileBytes);
+                        commandIDSent=true;
 
-                    retVal = fileInputStreamObj.read(fileBytes);
+                        System.out.println("Command ID sent!!");
+
+                        //Flush the stream
+                        this.clientOutputObj.flush();
+                     
+
+                    }else{
+
+
+                        this.terminateInputStreamObj = new ObjectInputStream(this.clientTerminatePortSocket.getInputStream());
+                        
+                        //Wait for termination signal
+                        byte[] responseByte=(byte [])this.terminateInputStreamObj.readObject();
+                        String s = new String(responseByte);
+                        if(!s.equals("1")){
+                        System.out.println("Sending the file contents now");
+
+                        int size=0;
+                        if(fsize>(iteration*FIXED_BUFFER_SIZE)){
+                            size=FIXED_BUFFER_SIZE;
+                        }else{
+                            size=fsize-((iteration-1)*FIXED_BUFFER_SIZE);
+                            isFileSent=true;
+
+
+                        }
+
+
+                        fileBytes = new byte[size];
+                        fileInputStreamObj.read(fileBytes);
+
+                        //Send the contents of file to Client
+                        this.clientOutputObj.writeObject(fileBytes);
+
+                        //Flush the stream
+                        this.clientOutputObj.flush();
+
+                        this.clientOutputObj.reset();
+                        iteration++;
+
+                        }else{
+                            System.out.println("Client sent terminate signal");
+                            return;
+                        }
+                        
+                        
+                   }
 
                 }
-                //this.clientOutputObj.writeObject("CONTENTS_TRANSFERRED");
-               // this.clientOutputObj.close();
 
+                
+                
 
             } else {
 
