@@ -7,6 +7,7 @@ package FTPClientServer;
 import java.net.*;
 import java.io.*;
 import java.util.ArrayList;
+import java.util.HashMap;
 
 //Server Class
 public class FTP_Server extends Thread {
@@ -40,8 +41,10 @@ public class FTP_Server extends Thread {
     ObjectOutputStream terminateClientOutputObj = null;
     ObjectInputStream terminateInputStreamObj = null;
 
-    Thread testThread = null;
+    //String commandID="1";
 
+    HashMap<String,String> filesLocked=new HashMap<String, String>();
+    
     /**
      * Enumeration of all the allowed commands.
      *
@@ -63,6 +66,38 @@ public class FTP_Server extends Thread {
         super("FTP_Server");
         this.clientNormalPortSocket=clientNormalPortSocket;
         this.clientTerminatePortSocket=clientTerminatePortSocket;
+       
+    }
+
+    //Default Constructor
+    FTP_Server(int nPort, int tPort) {
+
+        try {
+
+            System.out.println("Server Running!!!!");
+
+            normalPort = nPort;
+            serverNormalPortSocket = new ServerSocket(normalPort);
+            System.out.println("To execute normal commands, please connect to the Server from Client using " + normalPort + " port.");
+
+            terminatePort=tPort;
+            serverTerminatePortSocket=new ServerSocket(terminatePort);
+            System.out.println("To terminate execution of commands, please connect to the terminate port: " + terminatePort );
+
+
+        } catch (Exception e) {
+            System.out.println(e.getMessage());
+        }
+
+    }
+
+    public void acceptConnection(){
+        try{
+        //A client has connected to the Server on the normal port
+                    this.clientNormalPortSocket = serverNormalPortSocket.accept();
+                    this.clientTerminatePortSocket = serverTerminatePortSocket.accept();
+        }catch(Exception e){
+        }
 
     }
 
@@ -74,12 +109,12 @@ public class FTP_Server extends Thread {
     public void readCommandFromClient() {
         try {
 
-            //this.terminateInputStreamObj = new ObjectInputStream(this.clientTerminatePortSocket.getInputStream());
-            //Object inputObj = this.terminateInputStreamObj.readObject();
+            this.terminateInputStreamObj = new ObjectInputStream(this.clientTerminatePortSocket.getInputStream());
+            Object inputObj = this.terminateInputStreamObj.readObject();
 
 
-            this.inputStreamObj = new ObjectInputStream(this.clientNormalPortSocket.getInputStream());
-            Object inputObj = this.inputStreamObj.readObject();
+           // this.inputStreamObj = new ObjectInputStream(this.clientNormalPortSocket.getInputStream());
+           // Object inputObj = this.inputStreamObj.readObject();
 
             /**
              * inputObj can either be the buffered file contents(eg: put <fileName>)
@@ -188,10 +223,9 @@ public class FTP_Server extends Thread {
                     break;
 
                 case terminate:
-                    commandResult="Case terminate activated!!";
-                    System.out.println(commandResult);
-                    this.clientOutputObj.writeObject(commandResult);
-                    break;
+                     commandResult=this.executeTerminate(this.clientParams.toString());
+                     this.clientOutputObj.writeObject(commandResult);
+                     break;
                 default:
                     commandResult = "Invalid command!!! Please try again.";
                     break;
@@ -482,8 +516,7 @@ public class FTP_Server extends Thread {
                         //Flush the stream
                         this.clientOutputObj.flush();
 
-                        this.clientOutputObj.reset();
-                        }else{
+                        } else{
                             size=fsize-((iteration-1)*FIXED_BUFFER_SIZE);
                             isFileSent=true;
                             fileBytes = new byte[size];
@@ -499,8 +532,6 @@ public class FTP_Server extends Thread {
 
                         }
 
-
-                        
                         iteration++;
 
                         }else{
@@ -529,20 +560,28 @@ public class FTP_Server extends Thread {
             e.printStackTrace();
         }
 
-        
-
-
-
     }
+
+    public String executeTerminate(String commandID){
+        String result=null;
+        try{
+
+             this.filesLocked.put(commandID,"GET");
+             result=this.filesLocked.get(commandID);
+             
+        }catch(Exception e){
+
+        }
+        return result;
+    }
+
+
 
     public void run() {
         try {
 
-            while (true && (!this.currentThread().isInterrupted())) {
+           if(!this.currentThread().isInterrupted()) {
                 
-                this.readCommandFromClient();
-
-                if((!this.currentThread().isInterrupted()))
                     this.validateAndExecuteCommand();
 
             }
@@ -551,6 +590,41 @@ public class FTP_Server extends Thread {
             e.printStackTrace();
         }
   }
+
+         /**
+         * Main function
+         */
+	public static void main(String[] args) {
+
+            try
+            {
+		FTP_Server serverObject=new FTP_Server(Integer.parseInt(args[0]),Integer.parseInt(args[1]));
+
+                //A client has connected to the Server on the normal port
+                serverObject.clientNormalPortSocket = serverNormalPortSocket.accept();
+                serverObject.clientTerminatePortSocket = serverTerminatePortSocket.accept();
+
+                System.out.println("Client connection accepted on normal port: " + serverObject.clientNormalPortSocket);
+                System.out.println("Client connection accepted on terminate port: " + serverObject.clientTerminatePortSocket);
+
+                while(true){
+
+                    serverObject.readCommandFromClient();
+
+                    if((serverObject.clientCommand!=null)  && (serverObject.clientCommand.equalsIgnoreCase("terminate"))){
+                        serverObject.start();
+                    }else{
+                        serverObject.validateAndExecuteCommand();
+                    }
+
+                }
+
+            } catch (Exception e){
+                e.printStackTrace();
+            }
+
+
+	}
 
    
 }

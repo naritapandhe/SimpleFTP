@@ -58,7 +58,7 @@ public class FTP_Server_Main extends Thread {
 
     }
 
-    public static void main(String args[]){
+    /*public static void main(String args[]){
 
         FTP_Server_Main serverObject = new FTP_Server_Main(Integer.parseInt(args[0]),Integer.parseInt(args[1]));
 
@@ -84,7 +84,39 @@ public class FTP_Server_Main extends Thread {
         } catch (Exception e) {
             e.printStackTrace();
         }
-    }
+    }*/
+
+        /**
+         * Main function
+         */
+	public static void main(String[] args) {
+
+            try
+            {
+		FTP_Server serverObject=new FTP_Server(Integer.parseInt(args[0]),Integer.parseInt(args[1]));
+
+                 while (true) {
+
+                    System.out.println("IN while!!");
+                    
+                    serverObject.acceptConnection();
+                    
+                    System.out.println("Client connection accepted on normal port: " + serverObject.clientNormalPortSocket);
+                    System.out.println("Client connection accepted on terminate port: " + serverObject.clientTerminatePortSocket);
+
+                    serverObject.readCommandFromClient();
+                    
+                    Thread testThread = new Thread(serverObject);
+                    testThread.start();
+                }
+               
+
+            } catch (Exception e){
+                e.printStackTrace();
+            }
+
+
+	}
 
     
 }

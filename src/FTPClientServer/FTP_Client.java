@@ -426,9 +426,7 @@ public class FTP_Client extends Thread {
 
             if (!this.isInterrupted()) {
 
-               // System.out.println("Will go to sleep!!!!");
                 this.sleep(20000);
-                System.out.println("After waking up!!!");
                 if (this.validateCommandAndSendToServer()) {
                         this.processServerResponse();
                     }
@@ -439,9 +437,10 @@ public class FTP_Client extends Thread {
             e.printStackTrace();
         }
        }
+        
         /**
          * Main function
-         */
+         
 	public static void main(String[] args) {
 
             try
@@ -481,6 +480,6 @@ public class FTP_Client extends Thread {
             }
 
 
-	}
+	}*/
 
 }
