@@ -141,9 +141,7 @@ public class FTP_Server extends Thread {
     public void validateAndExecuteCommand() {
         try {
             String commandResult = null;
-            String threadID="\nThread ID: "+Long.toString(Thread.currentThread().getId())+"\n";
             ArrayList<String> lsResult = new ArrayList<String>();
-
             this.clientOutputObj = new ObjectOutputStream(this.clientNormalPortSocket.getOutputStream());
             Commands currentCommand = Commands.valueOf(this.clientCommand);
 
@@ -152,36 +150,30 @@ public class FTP_Server extends Thread {
 
                 case ls:
                     lsResult = this.executeLs();
-                    lsResult.add(threadID+"\t");
                     this.clientOutputObj.writeObject(lsResult);
                     break;
 
                 case pwd:
-                    commandResult=threadID;
-                    commandResult+= this.executePwd();
+                    commandResult = this.executePwd();
                     this.clientOutputObj.writeObject(commandResult);
                     break;
 
                 case mkdir:
-                    commandResult=threadID;
-                    commandResult+= this.executeMkdir((String) this.clientParams);
+                    commandResult = this.executeMkdir((String) this.clientParams);
                     this.clientOutputObj.writeObject(commandResult);
                     break;
 
                 case cd:
-                    commandResult=threadID;
-                    commandResult+= this.executeCd((String) this.clientParams);
+                    commandResult = this.executeCd((String) this.clientParams);
                     this.clientOutputObj.writeObject(commandResult);
                     break;
 
                 case delete:
-                    commandResult=threadID;
-                    commandResult+= this.executeDelete((String) this.clientParams);
+                    commandResult = this.executeDelete((String) this.clientParams);
                     this.clientOutputObj.writeObject(commandResult);
                     break;
 
                 case put:
-                    commandResult=threadID;
                     commandResult = this.executePut((String) this.clientParams, this.clientFileContents);
                     this.clientOutputObj.writeObject(commandResult);
                     break;
@@ -205,6 +197,7 @@ public class FTP_Server extends Thread {
 
 
     }
+
 
     /**
      * Function to execute the 'ls' command
@@ -456,26 +449,21 @@ public class FTP_Server extends Thread {
                     }else{
 
 
-                        this.terminateInputStreamObj = new ObjectInputStream(this.clientTerminatePortSocket.getInputStream());
+                        //this.terminateInputStreamObj = new ObjectInputStream(this.clientTerminatePortSocket.getInputStream());
                         
                         //Wait for termination signal
-                        byte[] responseByte=(byte [])this.terminateInputStreamObj.readObject();
-                        String s = new String(responseByte);
+                        //byte[] responseByte=(byte [])this.terminateInputStreamObj.readObject();
+                        //String s = new String(responseByte);
+                        String s="0";
+                        System.out.println("TTSFDFDTDFT: "+s);
+
                         if(!s.equals("1")){
                         System.out.println("Sending the file contents now");
 
                         int size=0;
                         if(fsize>(iteration*FIXED_BUFFER_SIZE)){
                             size=FIXED_BUFFER_SIZE;
-                        }else{
-                            size=fsize-((iteration-1)*FIXED_BUFFER_SIZE);
-                            isFileSent=true;
-
-
-                        }
-
-
-                        fileBytes = new byte[size];
+                            fileBytes = new byte[size];
                         fileInputStreamObj.read(fileBytes);
 
                         //Send the contents of file to Client
@@ -485,6 +473,24 @@ public class FTP_Server extends Thread {
                         this.clientOutputObj.flush();
 
                         this.clientOutputObj.reset();
+                        }else{
+                            size=fsize-((iteration-1)*FIXED_BUFFER_SIZE);
+                            isFileSent=true;
+                            fileBytes = new byte[size];
+                        fileInputStreamObj.read(fileBytes);
+
+                        //Send the contents of file to Client
+                        this.clientOutputObj.writeObject(fileBytes);
+
+                        //Flush the stream
+                        this.clientOutputObj.flush();
+
+                        
+
+                        }
+
+
+                        
                         iteration++;
 
                         }else{
@@ -507,10 +513,13 @@ public class FTP_Server extends Thread {
 
 
             }
+            this.clientOutputObj.flush();
 
         } catch (Exception e) {
             e.printStackTrace();
         }
+
+        
 
 
 

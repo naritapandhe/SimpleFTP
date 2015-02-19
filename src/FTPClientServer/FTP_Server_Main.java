@@ -68,8 +68,10 @@ public class FTP_Server_Main extends Thread {
                 //A client has connected to the Server on the normal port
                 serverObject.clientNormalPortSocket = serverNormalPortSocket.accept();
                 serverObject.clientTerminatePortSocket = serverTerminatePortSocket.accept();
+
                 Thread normalThread = new Thread(new FTP_Server(serverObject.clientNormalPortSocket,serverObject.clientTerminatePortSocket));
                 normalThread.start();
+
                 System.out.println("Client connection accepted on normal port: " + serverObject.clientNormalPortSocket);
                 System.out.println("Client connection accepted on terminate port: " + serverObject.clientTerminatePortSocket);
 
