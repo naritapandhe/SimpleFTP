@@ -11,7 +11,7 @@ import java.net.*;
 import java.util.ArrayList;
 
 //Client class
-public class FTP_Client {
+public class FTP_Client extends Thread {
 
         /**
          * Declaring the required variables
@@ -45,7 +45,8 @@ public class FTP_Client {
                 put,
                 delete,
                 cd,
-                quit
+                quit,
+                terminate
 
 	};
 
@@ -72,7 +73,7 @@ public class FTP_Client {
                         System.out.println("ls");System.out.println("pwd");System.out.println("cd <absolute_path>");
                         System.out.println("mkdir <absolute_path>");
                         System.out.println("get <absolute_path/filename>");System.out.println("put <absolute_path/filename>");
-                        System.out.println("delete <absolute_path/filename>");
+                        System.out.println("delete <absolute_path/filename>");System.out.println("terminate");
                         System.out.println("quit\n");
 
                         this.printStream("", false);
@@ -142,7 +143,6 @@ public class FTP_Client {
 
             try {
 
-               
                 
                 this.outputStreamObj= new ObjectOutputStream(this.clientNormalPortSocket.getOutputStream());
 
@@ -172,6 +172,12 @@ public class FTP_Client {
                                 
                                 break;
 
+                       case terminate:
+                                this.terminateOutputStreamObj= new ObjectOutputStream(this.clientTerminatePortSocket.getOutputStream());
+                                this.terminateOutputStreamObj.writeObject(this.commandSplitArray);
+                                this.terminateOutputStreamObj.flush();
+                                commandResult=true;
+                                break;
 
                       default:
                                 //Display the error and shut down
@@ -303,7 +309,7 @@ public class FTP_Client {
                     
                     
                 }
-                BufferedReader br=new BufferedReader(new InputStreamReader(System.in));
+                /*BufferedReader br=new BufferedReader(new InputStreamReader(System.in));
                 this.printStream("Do you want to quit? (1(Yes) / 0(No))", true);
                 String answer=br.readLine();
                 if(answer.equals("1")){
@@ -318,7 +324,7 @@ public class FTP_Client {
                        this.printStream("Terminate signal sent....", true);
                        return;
 
-                }
+                }*/
                 test=inputStreamObj.readObject();
                  
             }
@@ -414,7 +420,25 @@ public class FTP_Client {
            else
                 System.out.print(clientPrompt+stream);
        }
- 
+
+        public void run() {
+        try {
+
+            if (!this.isInterrupted()) {
+
+               // System.out.println("Will go to sleep!!!!");
+                this.sleep(20000);
+                System.out.println("After waking up!!!");
+                if (this.validateCommandAndSendToServer()) {
+                        this.processServerResponse();
+                    }
+                }
+
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+       }
         /**
          * Main function
          */
@@ -442,6 +466,8 @@ public class FTP_Client {
                           client.printStream("Disconnected from the Server.....",true);
                           System.exit(0);
 				
+                    }else if(client.commandSplitArray[4]!=null && client.commandSplitArray[4]=="&"){
+                        client.start();
                     }else{
                         if(client.validateCommandAndSendToServer()){
                             client.processServerResponse();

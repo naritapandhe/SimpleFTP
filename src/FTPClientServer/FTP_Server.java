@@ -54,7 +54,8 @@ public class FTP_Server extends Thread {
         get,
         put,
         delete,
-        cd
+        cd,
+        terminate
     };
 
     FTP_Server(Socket clientNormalPortSocket,Socket clientTerminatePortSocket) {
@@ -72,6 +73,10 @@ public class FTP_Server extends Thread {
      */
     public void readCommandFromClient() {
         try {
+
+            //this.terminateInputStreamObj = new ObjectInputStream(this.clientTerminatePortSocket.getInputStream());
+            //Object inputObj = this.terminateInputStreamObj.readObject();
+
 
             this.inputStreamObj = new ObjectInputStream(this.clientNormalPortSocket.getInputStream());
             Object inputObj = this.inputStreamObj.readObject();
@@ -182,6 +187,11 @@ public class FTP_Server extends Thread {
                     this.executeGet((String) this.clientParams);
                     break;
 
+                case terminate:
+                    commandResult="Case terminate activated!!";
+                    System.out.println(commandResult);
+                    this.clientOutputObj.writeObject(commandResult);
+                    break;
                 default:
                     commandResult = "Invalid command!!! Please try again.";
                     break;
