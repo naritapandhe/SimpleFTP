@@ -9,31 +9,35 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketException;
 
 /**
  *
  * @author admin
  */
-public class FTP_Server_Main extends Thread {
+public class FTP_Server_Main {
      /**
      * Declaring the required variables
      *
      */
-    static int normalPort;
-    static int terminatePort;
+     int normalPort;
+    int terminatePort;
 
     Socket clientNormalPortSocket;
     Socket clientTerminatePortSocket;
 
-    static ServerSocket serverNormalPortSocket;
-    static ServerSocket serverTerminatePortSocket;
+     ServerSocket serverNormalPortSocket;
+     ServerSocket serverTerminatePortSocket;
 
     String clientCommand;
     Object clientParams;
     Object clientFileContents;
     ObjectOutputStream clientOutputObj = null;
     ObjectInputStream inputStreamObj = null;
-    Thread testThread = null;
+    int MAX_THREAD_COUNT=100;
+
+    FTP_Server ftpServerObj=null;
+    
 
 
     //Default Constructor
@@ -41,16 +45,16 @@ public class FTP_Server_Main extends Thread {
 
         try {
 
-            System.out.println("Server Running!!!!");
+            
+            this.normalPort = nPort;
+            this.terminatePort=tPort;
+            this.serverNormalPortSocket = new ServerSocket(this.normalPort);
+            System.out.println("To execute normal commands, please connect to the Server from Client using " + this.normalPort + " port.");
 
-            normalPort = nPort;
-            serverNormalPortSocket = new ServerSocket(normalPort);
-            System.out.println("To execute normal commands, please connect to the Server from Client using " + normalPort + " port.");
-
-            terminatePort=tPort;
-            serverTerminatePortSocket=new ServerSocket(terminatePort);
-            System.out.println("To terminate execution of commands, please connect to the terminate port: " + terminatePort );
-
+            this.terminatePort=tPort;
+            this.serverTerminatePortSocket=new ServerSocket(this.terminatePort);
+            System.out.println("To terminate execution of commands, please connect to the terminate port: " + this.terminatePort );
+            
 
         } catch (Exception e) {
             System.out.println(e.getMessage());
@@ -58,56 +62,23 @@ public class FTP_Server_Main extends Thread {
 
     }
 
-    /*public static void main(String args[]){
+    /**
+    * Main function
+    */
+    public static void main(String[] args) {
 
-        FTP_Server_Main serverObject = new FTP_Server_Main(Integer.parseInt(args[0]),Integer.parseInt(args[1]));
-
-        try {
-            while (true) {
-
-                //A client has connected to the Server on the normal port
-                serverObject.clientNormalPortSocket = serverNormalPortSocket.accept();
-                serverObject.clientTerminatePortSocket = serverTerminatePortSocket.accept();
-
-                Thread normalThread = new Thread(new FTP_Server(serverObject.clientNormalPortSocket,serverObject.clientTerminatePortSocket));
-                normalThread.start();
-
-                System.out.println("Client connection accepted on normal port: " + serverObject.clientNormalPortSocket);
-                System.out.println("Client connection accepted on terminate port: " + serverObject.clientTerminatePortSocket);
-
-
-               
-
-
-            }
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }*/
-
-        /**
-         * Main function
-         */
-	public static void main(String[] args) {
-
+            int currentThreadCount=0;
             try
             {
-		FTP_Server serverObject=new FTP_Server(Integer.parseInt(args[0]),Integer.parseInt(args[1]));
+                FTP_Server_Main ftpMain=new FTP_Server_Main(Integer.parseInt(args[0]),Integer.parseInt(args[1]));
+		FTP_Server serverObject;
+                while (true) {
 
-                 while (true) {
-
-                    System.out.println("IN while!!");
+                    serverObject=new FTP_Server(ftpMain.serverNormalPortSocket.accept(),ftpMain.serverTerminatePortSocket.accept());
+                    Thread t=new Thread(serverObject);
+                    t.start();;
                     
-                    serverObject.acceptConnection();
-                    
-                    System.out.println("Client connection accepted on normal port: " + serverObject.clientNormalPortSocket);
-                    System.out.println("Client connection accepted on terminate port: " + serverObject.clientTerminatePortSocket);
-
-                    serverObject.readCommandFromClient();
-                    
-                    Thread testThread = new Thread(serverObject);
-                    testThread.start();
+                   
                 }
                
 

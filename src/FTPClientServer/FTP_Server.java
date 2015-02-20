@@ -10,7 +10,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 
 //Server Class
-public class FTP_Server extends Thread {
+public class FTP_Server implements Runnable  {
 
     /**
      * Declaring the required variables
@@ -20,14 +20,14 @@ public class FTP_Server extends Thread {
 //    Socket clientSocket;
 //    static ServerSocket serverSocket;
 
-    static int normalPort;
-    static int terminatePort;
+     int normalPort;
+     int terminatePort;
 
     Socket clientNormalPortSocket;
     Socket clientTerminatePortSocket;
 
-    static ServerSocket serverNormalPortSocket;
-    static ServerSocket serverTerminatePortSocket;
+     ServerSocket serverNormalPortSocket;
+     ServerSocket serverTerminatePortSocket;
 
 
 
@@ -44,6 +44,10 @@ public class FTP_Server extends Thread {
     //String commandID="1";
 
     HashMap<String,String> filesLocked=new HashMap<String, String>();
+
+    String currentThreadID=null;
+
+    boolean connStatus=false;
     
     /**
      * Enumeration of all the allowed commands.
@@ -61,14 +65,7 @@ public class FTP_Server extends Thread {
         terminate
     };
 
-    FTP_Server(Socket clientNormalPortSocket,Socket clientTerminatePortSocket) {
-        
-        super("FTP_Server");
-        this.clientNormalPortSocket=clientNormalPortSocket;
-        this.clientTerminatePortSocket=clientTerminatePortSocket;
-       
-    }
-
+    
     //Default Constructor
     FTP_Server(int nPort, int tPort) {
 
@@ -76,29 +73,54 @@ public class FTP_Server extends Thread {
 
             System.out.println("Server Running!!!!");
 
-            normalPort = nPort;
-            serverNormalPortSocket = new ServerSocket(normalPort);
+            this.normalPort = nPort;
+            this.serverNormalPortSocket = new ServerSocket(this.normalPort);
             System.out.println("To execute normal commands, please connect to the Server from Client using " + normalPort + " port.");
 
-            terminatePort=tPort;
-            serverTerminatePortSocket=new ServerSocket(terminatePort);
+            this.terminatePort=tPort;
+            this.serverTerminatePortSocket=new ServerSocket(this.terminatePort);
             System.out.println("To terminate execution of commands, please connect to the terminate port: " + terminatePort );
 
 
         } catch (Exception e) {
-            System.out.println(e.getMessage());
+           e.printStackTrace();
+        }
+
+    }
+
+     //Default Constructor
+    FTP_Server(Socket normal, Socket terminate) {
+
+        try {
+
+                    this.clientNormalPortSocket = normal;
+                    System.out.println("normal port: "+ this.clientNormalPortSocket);
+
+                    this.clientTerminatePortSocket = terminate;
+                    System.out.println("terminate port: "+ this.clientTerminatePortSocket);
+
+
+        } catch (Exception e) {
+           e.printStackTrace();
         }
 
     }
 
     public void acceptConnection(){
         try{
-        //A client has connected to the Server on the normal port
-                    this.clientNormalPortSocket = serverNormalPortSocket.accept();
-                    this.clientTerminatePortSocket = serverTerminatePortSocket.accept();
-        }catch(Exception e){
-        }
 
+                    this.clientNormalPortSocket = this.serverNormalPortSocket.accept();
+                    System.out.println("normal port: "+ this.clientNormalPortSocket);
+
+                    this.clientTerminatePortSocket = this.serverTerminatePortSocket.accept();
+                    System.out.println("terminate port: "+ this.clientTerminatePortSocket);
+                    
+        }catch(Exception e){
+//            this.currentThread().interrupt();
+//            this.currentThread().yield();
+            
+        }
+        
     }
 
     
@@ -109,12 +131,13 @@ public class FTP_Server extends Thread {
     public void readCommandFromClient() {
         try {
 
-            this.terminateInputStreamObj = new ObjectInputStream(this.clientTerminatePortSocket.getInputStream());
-            Object inputObj = this.terminateInputStreamObj.readObject();
+            Object inputObj=null;
+            if((inputObj=new ObjectInputStream(this.clientNormalPortSocket.getInputStream()).readObject()) == null){
+                this.terminateInputStreamObj = new ObjectInputStream(this.clientTerminatePortSocket.getInputStream());
+                inputObj = this.terminateInputStreamObj.readObject();
 
-
-           // this.inputStreamObj = new ObjectInputStream(this.clientNormalPortSocket.getInputStream());
-           // Object inputObj = this.inputStreamObj.readObject();
+            }
+            
 
             /**
              * inputObj can either be the buffered file contents(eg: put <fileName>)
@@ -164,11 +187,11 @@ public class FTP_Server extends Thread {
         }catch (EOFException e) {
 
            System.out.println("Client exited!!!");
-           currentThread().interrupt();
+//           this.currentThread().interrupt();
                
         }catch (Exception e) {
-            System.out.println("Exception: "+e.getMessage());
-            e.printStackTrace();
+            //System.out.println("Exception: "+e.getMessage());
+            //e.printStackTrace();
         }
 
 
@@ -191,11 +214,15 @@ public class FTP_Server extends Thread {
                 case ls:
                     lsResult = this.executeLs();
                     this.clientOutputObj.writeObject(lsResult);
+                   // this.currentThread().interrupt();
+                    //this.currentThread().yield();
                     break;
 
                 case pwd:
                     commandResult = this.executePwd();
                     this.clientOutputObj.writeObject(commandResult);
+                    //this.currentThread().interrupt();
+                    //this.currentThread().yield();
                     break;
 
                 case mkdir:
@@ -223,7 +250,13 @@ public class FTP_Server extends Thread {
                     break;
 
                 case terminate:
-                     commandResult=this.executeTerminate(this.clientParams.toString());
+                     this.filesLocked.put("1", "GET");
+                     boolean terminateResult=this.executeTerminate(this.clientParams.toString());
+                     if(terminateResult){
+                         commandResult="Command terminated succesfully";
+                     }else{
+                         commandResult="Invalid command ID.";
+                     }
                      this.clientOutputObj.writeObject(commandResult);
                      break;
                 default:
@@ -235,7 +268,7 @@ public class FTP_Server extends Thread {
 
 
         } catch (Exception e) {
-            e.printStackTrace();
+            //e.printStackTrace();
         }
 
 
@@ -266,7 +299,7 @@ public class FTP_Server extends Thread {
             }
 
         } catch (Exception e) {
-            e.printStackTrace();
+           // e.printStackTrace();
         }
         return fileList;
     }
@@ -317,7 +350,7 @@ public class FTP_Server extends Thread {
                 result = "Directory already exists!!";
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            //e.printStackTrace();
         }
 
         return result;
@@ -460,10 +493,13 @@ public class FTP_Server extends Thread {
             
             int iteration=1;
             boolean isFileSent=false;
+            String commandID=this.currentThreadID+"_"+GET_COMMAND_ID;
 
+            System.out.println("Command ID: "+commandID);
 
             if (fileObj.exists()) {
 
+                this.filesLocked.put(commandID, fileName);
                 
                 FileInputStream fileInputStreamObj = new FileInputStream(fileName);
                 int counter = 0;//used to track progress through upload
@@ -476,9 +512,7 @@ public class FTP_Server extends Thread {
                 while(true && !isFileSent){
                     if(!commandIDSent){
 
-                        String threadID=Long.toString(Thread.currentThread().getId());
-                        String commandID=threadID+"_"+GET_COMMAND_ID;
-
+                        
                         result = "CommandID:"+commandID;
                         fileBytes = result.getBytes("UTF-8");
                         this.clientOutputObj.writeObject(fileBytes);
@@ -492,43 +526,36 @@ public class FTP_Server extends Thread {
 
                     }else{
 
+                      //  this.sleep(20000);
+                        if(!this.isTerminated(commandID)){
 
-                        //this.terminateInputStreamObj = new ObjectInputStream(this.clientTerminatePortSocket.getInputStream());
-                        
-                        //Wait for termination signal
-                        //byte[] responseByte=(byte [])this.terminateInputStreamObj.readObject();
-                        //String s = new String(responseByte);
-                        String s="0";
-                        System.out.println("TTSFDFDTDFT: "+s);
-
-                        if(!s.equals("1")){
                         System.out.println("Sending the file contents now");
 
                         int size=0;
+
                         if(fsize>(iteration*FIXED_BUFFER_SIZE)){
                             size=FIXED_BUFFER_SIZE;
                             fileBytes = new byte[size];
-                        fileInputStreamObj.read(fileBytes);
+                            fileInputStreamObj.read(fileBytes);
 
-                        //Send the contents of file to Client
-                        this.clientOutputObj.writeObject(fileBytes);
+                            //Send the contents of file to Client
+                            this.clientOutputObj.writeObject(fileBytes);
 
-                        //Flush the stream
-                        this.clientOutputObj.flush();
+                            //Flush the stream
+                            this.clientOutputObj.flush();
 
                         } else{
+
                             size=fsize-((iteration-1)*FIXED_BUFFER_SIZE);
                             isFileSent=true;
                             fileBytes = new byte[size];
-                        fileInputStreamObj.read(fileBytes);
+                            fileInputStreamObj.read(fileBytes);
 
-                        //Send the contents of file to Client
-                        this.clientOutputObj.writeObject(fileBytes);
+                            //Send the contents of file to Client
+                            this.clientOutputObj.writeObject(fileBytes);
 
-                        //Flush the stream
-                        this.clientOutputObj.flush();
-
-                        
+                            //Flush the stream
+                            this.clientOutputObj.flush();
 
                         }
 
@@ -557,22 +584,42 @@ public class FTP_Server extends Thread {
             this.clientOutputObj.flush();
 
         } catch (Exception e) {
-            e.printStackTrace();
+           // e.printStackTrace();
         }
 
     }
 
-    public String executeTerminate(String commandID){
-        String result=null;
+    public boolean executeTerminate(String commandID){
+        boolean terminate=false;
+
         try{
 
-             this.filesLocked.put(commandID,"GET");
-             result=this.filesLocked.get(commandID);
+             if(this.filesLocked.containsKey(commandID)){
+                 this.filesLocked.remove(commandID);
+                 terminate=true;
+             }
+        }catch(Exception e){
+
+        }
+        System.out.println("File remove keli ka: "+terminate);
+        return terminate;
+    }
+
+    public boolean isTerminated(String commandID){
+        
+        boolean terminated=false;
+        try{
+
+            if(!this.filesLocked.containsKey(commandID))
+             terminated=true;
              
         }catch(Exception e){
 
         }
-        return result;
+
+        System.out.println("Terminate current status: "+terminated);
+        return terminated;
+
     }
 
 
@@ -580,52 +627,18 @@ public class FTP_Server extends Thread {
     public void run() {
         try {
 
-           if(!this.currentThread().isInterrupted()) {
-                
+                    this.readCommandFromClient();
                     this.validateAndExecuteCommand();
 
-            }
+           
+        }catch (Exception e) {
 
-        } catch (Exception e) {
-            e.printStackTrace();
+            System.out.println("Done!!");
+            
         }
   }
 
-         /**
-         * Main function
-         */
-	public static void main(String[] args) {
-
-            try
-            {
-		FTP_Server serverObject=new FTP_Server(Integer.parseInt(args[0]),Integer.parseInt(args[1]));
-
-                //A client has connected to the Server on the normal port
-                serverObject.clientNormalPortSocket = serverNormalPortSocket.accept();
-                serverObject.clientTerminatePortSocket = serverTerminatePortSocket.accept();
-
-                System.out.println("Client connection accepted on normal port: " + serverObject.clientNormalPortSocket);
-                System.out.println("Client connection accepted on terminate port: " + serverObject.clientTerminatePortSocket);
-
-                while(true){
-
-                    serverObject.readCommandFromClient();
-
-                    if((serverObject.clientCommand!=null)  && (serverObject.clientCommand.equalsIgnoreCase("terminate"))){
-                        serverObject.start();
-                    }else{
-                        serverObject.validateAndExecuteCommand();
-                    }
-
-                }
-
-            } catch (Exception e){
-                e.printStackTrace();
-            }
-
-
-	}
-
+         
    
 }
 

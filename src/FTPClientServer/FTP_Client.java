@@ -11,7 +11,7 @@ import java.net.*;
 import java.util.ArrayList;
 
 //Client class
-public class FTP_Client extends Thread {
+public class FTP_Client implements Runnable {
 
         /**
          * Declaring the required variables
@@ -94,7 +94,8 @@ public class FTP_Client extends Thread {
 	public void readCommandFromUser() {
 
 		try {
-			BufferedReader bufferedInput = new BufferedReader(new InputStreamReader(System.in));
+
+                    BufferedReader bufferedInput = new BufferedReader(new InputStreamReader(System.in));
 
                         //Assign to the class
                         this.inputCommand = bufferedInput.readLine();
@@ -118,7 +119,8 @@ public class FTP_Client extends Thread {
 	public Object[] parseCommand() {
 
 		// Split the sentence based on spaces
-		Object[] splittedCommand= this.inputCommand.split("\\s+");
+		Object[] splittedCommand= new Object[5];
+                splittedCommand=this.inputCommand.split("\\s+");
 
                 //The first param is the command always
                 this.commandSplitArray[0]=splittedCommand[0].toString().toLowerCase();
@@ -126,6 +128,11 @@ public class FTP_Client extends Thread {
                 if(splittedCommand.length>1 && splittedCommand[1]!=null)
                     //The second param is the absolute_path of the file or directory always
                     this.commandSplitArray[1]=splittedCommand[1];
+
+                if(splittedCommand.length>2 && splittedCommand[2]!=null){
+                    //The second param is the absolute_path of the file or directory always
+                    this.commandSplitArray[4]=splittedCommand[2];
+                 }
 
 
                 return this.commandSplitArray;
@@ -138,7 +145,7 @@ public class FTP_Client extends Thread {
          * - If not, an error message is displayed.
          *
          */
-	public boolean validateCommandAndSendToServer() {
+            public boolean validateCommandAndSendToServer() {
             boolean commandResult=false;
 
             try {
@@ -175,6 +182,7 @@ public class FTP_Client extends Thread {
                        case terminate:
                                 this.terminateOutputStreamObj= new ObjectOutputStream(this.clientTerminatePortSocket.getOutputStream());
                                 this.terminateOutputStreamObj.writeObject(this.commandSplitArray);
+                                this.outputStreamObj.writeObject(null);
                                 this.terminateOutputStreamObj.flush();
                                 commandResult=true;
                                 break;
@@ -372,7 +380,8 @@ public class FTP_Client extends Thread {
 
                 }
 
-
+                this.clientNormalPortSocket.close();
+                this.clientTerminatePortSocket.close();
 
             }catch(Exception e){
 
@@ -403,6 +412,8 @@ public class FTP_Client extends Thread {
 
             }
 
+            
+
         }
 
        
@@ -424,13 +435,18 @@ public class FTP_Client extends Thread {
         public void run() {
         try {
 
-            if (!this.isInterrupted()) {
+            //if (!this) {
 
-                this.sleep(20000);
                 if (this.validateCommandAndSendToServer()) {
+                        System.out.println("Before sending thread to sleep!!!");
+                        System.out.println("After waking up");
+                        System.out.println("Before processing the server response");
                         this.processServerResponse();
+                //        this.currentThread().interrupt();
+                //        this.currentThread().yield();
+                        
                     }
-                }
+              //  }
 
 
         } catch (Exception e) {
