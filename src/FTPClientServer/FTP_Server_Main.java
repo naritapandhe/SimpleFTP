@@ -26,19 +26,8 @@ public class FTP_Server_Main {
     Socket clientNormalPortSocket;
     Socket clientTerminatePortSocket;
 
-     ServerSocket serverNormalPortSocket;
-     ServerSocket serverTerminatePortSocket;
-
-    String clientCommand;
-    Object clientParams;
-    Object clientFileContents;
-    ObjectOutputStream clientOutputObj = null;
-    ObjectInputStream inputStreamObj = null;
-    int MAX_THREAD_COUNT=100;
-
-    FTP_Server ftpServerObj=null;
-    
-
+    ServerSocket serverNormalPortSocket;
+    ServerSocket serverTerminatePortSocket;
 
     //Default Constructor
     FTP_Server_Main(int nPort, int tPort) {
@@ -67,7 +56,6 @@ public class FTP_Server_Main {
     */
     public static void main(String[] args) {
 
-            int currentThreadCount=0;
             try
             {
                 FTP_Server_Main ftpMain=new FTP_Server_Main(Integer.parseInt(args[0]),Integer.parseInt(args[1]));
@@ -78,7 +66,6 @@ public class FTP_Server_Main {
                     Thread t=new Thread(serverObject);
                     serverObject.currentThreadID=Long.toString(t.getId());
                     t.start();;
-                    
                    
                 }
                

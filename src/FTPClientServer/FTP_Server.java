@@ -18,40 +18,29 @@ public class FTP_Server implements Runnable  {
      * Declaring the required variables
      *
      */
-//    static int serverPort;
-//    Socket clientSocket;
-//    static ServerSocket serverSocket;
-
      int normalPort;
      int terminatePort;
+     String currentThreadID=null;
+     String clientCommand;
 
-    Socket clientNormalPortSocket;
-    Socket clientTerminatePortSocket;
+     
 
+     Socket clientNormalPortSocket;
+     Socket clientTerminatePortSocket;
      ServerSocket serverNormalPortSocket;
      ServerSocket serverTerminatePortSocket;
 
+     Object clientParams;
+     Object clientFileContents;
 
+     ObjectOutputStream clientOutputObj = null;
+     ObjectInputStream inputStreamObj = null;
 
-    String clientCommand;
-    Object clientParams;
-    Object clientFileContents;
+     ObjectOutputStream terminateClientOutputObj = null;
+     ObjectInputStream terminateInputStreamObj = null;
 
-    ObjectOutputStream clientOutputObj = null;
-    ObjectInputStream inputStreamObj = null;
+     public static ConcurrentMap<String,String> filesLocked = new ConcurrentHashMap<String,String>();
 
-    ObjectOutputStream terminateClientOutputObj = null;
-    ObjectInputStream terminateInputStreamObj = null;
-
-    //String commandID="1";
-
-   // public volatile HashMap<String,String> filesLocked=new HashMap<String, String>();
-
-    public static ConcurrentMap<String,String> filesLocked = new ConcurrentHashMap<String,String>();
-
-    String currentThreadID=null;
-
-    boolean connStatus=false;
     
     /**
      * Enumeration of all the allowed commands.
@@ -88,6 +77,9 @@ public class FTP_Server implements Runnable  {
             System.out.println("To terminate execution of commands, please connect to the terminate port: " + terminatePort );
 
 
+            this.currentCommand=null;
+
+
         } catch (Exception e) {
            e.printStackTrace();
         }
@@ -100,10 +92,10 @@ public class FTP_Server implements Runnable  {
         try {
 
                     this.clientNormalPortSocket = normal;
-                    System.out.println("normal port: "+ this.clientNormalPortSocket);
+                    System.out.println("Normal port: "+ this.clientNormalPortSocket);
 
                     this.clientTerminatePortSocket = terminate;
-                    System.out.println("terminate port: "+ this.clientTerminatePortSocket);
+                    System.out.println("Terminate port: "+ this.clientTerminatePortSocket);
 
 
         } catch (Exception e) {
@@ -112,24 +104,6 @@ public class FTP_Server implements Runnable  {
 
     }
 
-    public void acceptConnection(){
-        try{
-
-                    this.clientNormalPortSocket = this.serverNormalPortSocket.accept();
-                    System.out.println("normal port: "+ this.clientNormalPortSocket);
-
-                    this.clientTerminatePortSocket = this.serverTerminatePortSocket.accept();
-                    System.out.println("terminate port: "+ this.clientTerminatePortSocket);
-                    
-        }catch(Exception e){
-//            this.currentThread().interrupt();
-//            this.currentThread().yield();
-            
-        }
-        
-    }
-
-    
     /**
      * Function to read the input sent from Client
      *
@@ -186,6 +160,8 @@ public class FTP_Server implements Runnable  {
                 this.clientFileContents = clientInput[2];
 
             }
+
+            this.currentCommand = Commands.valueOf(this.clientCommand);
             System.out.println("\n\nCommand received from Client: '" + this.clientCommand + "'");
             System.out.println("Parameters received from Client: '" + this.clientParams + "'");
 
@@ -194,11 +170,8 @@ public class FTP_Server implements Runnable  {
         }catch (EOFException e) {
 
            System.out.println("Client exited!!!");
-//           this.currentThread().interrupt();
                
         }catch (Exception e) {
-            //System.out.println("Exception: "+e.getMessage());
-            //e.printStackTrace();
         }
 
 
@@ -213,23 +186,18 @@ public class FTP_Server implements Runnable  {
             String commandResult = null;
             ArrayList<String> lsResult = new ArrayList<String>();
             this.clientOutputObj = new ObjectOutputStream(this.clientNormalPortSocket.getOutputStream());
-            //Commands currentCommand = Commands.valueOf(this.clientCommand);
-
+            
             //Switch based on the command to be executed
             switch (this.currentCommand) {
 
                 case ls:
                     lsResult = this.executeLs();
                     this.clientOutputObj.writeObject(lsResult);
-                   // this.currentThread().interrupt();
-                    //this.currentThread().yield();
                     break;
 
                 case pwd:
                     commandResult = this.executePwd();
                     this.clientOutputObj.writeObject(commandResult);
-                    //this.currentThread().interrupt();
-                    //this.currentThread().yield();
                     break;
 
                 case mkdir:
@@ -253,7 +221,6 @@ public class FTP_Server implements Runnable  {
                     break;
 
                 case get:
-                    System.out.println("in case get!!!");
                     this.executeGet((String) this.clientParams);
                     break;
 
@@ -467,13 +434,7 @@ public class FTP_Server implements Runnable  {
             //Close the stream
             fileOutputStreamObject.close();
 
-            
-
-
-
-            
-
-        } catch (Exception e) {
+         } catch (Exception e) {
             result = "Some error occurred!!!Please try again";
             //e.printStackTrace();
         }
@@ -514,7 +475,7 @@ public class FTP_Server implements Runnable  {
                 byte[] fileBytes = new byte[FIXED_BUFFER_SIZE];
 
                 //Read the contents of a file in a buffer and send it to Client
-                while(true && !isFileSent && this.isAllowed(fileName, commandID)){
+                while(true && !isFileSent && this.isAllowed(fileName, commandID) && !Thread.currentThread().interrupted()){
                     if(!commandIDSent){
 
                         
@@ -531,7 +492,7 @@ public class FTP_Server implements Runnable  {
 
                     }else{
 
-                        Thread.currentThread().sleep(20000);
+                        Thread.currentThread().sleep(10000);
                         if(!this.isTerminated(commandID)){
 
                         System.out.println("Sending the file contents now: "+commandID);
@@ -561,6 +522,10 @@ public class FTP_Server implements Runnable  {
 
                             //Flush the stream
                             this.clientOutputObj.flush();
+
+                            System.out.println("File sent successfully!!! Please verify at the client side");
+
+                            this.clientOutputObj.reset();
 
                         }
 
@@ -667,6 +632,7 @@ public class FTP_Server implements Runnable  {
             }
         }catch(Exception e){
         }
+        System.out.println("Is allowed: "+allowed);
         return allowed;
     }
 
@@ -683,8 +649,6 @@ public class FTP_Server implements Runnable  {
         try {
 
                     this.readCommandFromClient();
-                    System.out.println("fjfjfjjfjf"+this.clientCommand);
-                    this.currentCommand = Commands.valueOf(this.clientCommand);
                     this.validateAndExecuteCommand();
 
            

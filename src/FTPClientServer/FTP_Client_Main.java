@@ -45,8 +45,6 @@ public class FTP_Client_Main {
 
 	}
 
-
-        
          /**
          * Main function
          */
@@ -54,17 +52,20 @@ public class FTP_Client_Main {
 
             try
             {
+                
 		FTP_Client client=new FTP_Client(args[0],Integer.parseInt(args[1]),Integer.parseInt(args[2]));
                 System.out.println("Connecting to the server!!!!");
 
                 while(true){
-                    //Connect to the Server on Normal Port
-                client.clientNormalPortSocket = new Socket(client.serverAddress,client.serverNormalPort);
 
+                Thread.currentThread().sleep(2000);
+
+                //Connect to the Server on Normal Port
+                client.clientNormalPortSocket = new Socket(client.serverAddress,client.serverNormalPort);
                 client.clientTerminatePortSocket = new Socket(client.serverAddress,client.serverTerminatePort);
-                
-                    client.displayCommandsToUser();
-                    client.readCommandFromUser();
+
+                client.displayCommandsToUser();
+                client.readCommandFromUser();
 
                     if(client.commandSplitArray[0].toString().equalsIgnoreCase("quit")){
 
