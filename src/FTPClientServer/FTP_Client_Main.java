@@ -26,15 +26,7 @@ public class FTP_Client_Main {
         Socket clientNormalPortSocket;
         Socket clientTerminatePortSocket;
 
-	String inputCommand;
-        Object[] commandSplitArray = new Object[5];
-
-        ObjectOutputStream outputStreamObj=null;
-        ObjectInputStream inputStreamObj=null;
-
-	ObjectOutputStream terminateOutputStreamObj=null;
-        ObjectInputStream terminateiInputStreamObj=null;
-
+	
         //Default Client's constructor
 	FTP_Client_Main(String serverAddressParm, int serverNormalPortParm, int serverTerminatePortParm) {
 
@@ -71,7 +63,6 @@ public class FTP_Client_Main {
 
                 client.clientTerminatePortSocket = new Socket(client.serverAddress,client.serverTerminatePort);
                 
-                    client.commandSplitArray=new Object[5];
                     client.displayCommandsToUser();
                     client.readCommandFromUser();
 

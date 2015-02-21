@@ -25,13 +25,17 @@ public class FTP_Client implements Runnable {
         Socket clientTerminatePortSocket;
 
 	String inputCommand;
-        Object[] commandSplitArray = new Object[5];
+
+        Object[] commandSplitArray;
+        //= new Object[5];
 
         ObjectOutputStream outputStreamObj=null;
         ObjectInputStream inputStreamObj=null;
         
 	ObjectOutputStream terminateOutputStreamObj=null;
         ObjectInputStream terminateiInputStreamObj=null;
+
+
 
         /**
 	 * Enumeration of all the allowed commands.
@@ -50,13 +54,15 @@ public class FTP_Client implements Runnable {
 
 	};
 
+        Commands currentCommand;
+        
         //Default Client's constructor
 	FTP_Client(String serverAddressParm, int serverNormalPortParm, int serverTerminatePortParm) {
 
 		serverAddress = serverAddressParm;
 		serverNormalPort = serverNormalPortParm;
                 serverTerminatePort = serverTerminatePortParm;
-
+                this.currentCommand=null;
 	}
 
 
@@ -95,6 +101,7 @@ public class FTP_Client implements Runnable {
 
 		try {
 
+                     
                     BufferedReader bufferedInput = new BufferedReader(new InputStreamReader(System.in));
 
                         //Assign to the class
@@ -118,12 +125,17 @@ public class FTP_Client implements Runnable {
 	 */
 	public Object[] parseCommand() {
 
+            try{
+               Thread.currentThread().sleep(2000);
+               this.commandSplitArray=new Object[5];
+
 		// Split the sentence based on spaces
 		Object[] splittedCommand= new Object[5];
                 splittedCommand=this.inputCommand.split("\\s+");
 
                 //The first param is the command always
                 this.commandSplitArray[0]=splittedCommand[0].toString().toLowerCase();
+                this.currentCommand = Commands.valueOf(this.commandSplitArray[0].toString());
 
                 if(splittedCommand.length>1 && splittedCommand[1]!=null)
                     //The second param is the absolute_path of the file or directory always
@@ -134,6 +146,8 @@ public class FTP_Client implements Runnable {
                     this.commandSplitArray[4]=splittedCommand[2];
                  }
 
+            }catch(Exception e){
+            }
 
                 return this.commandSplitArray;
 
@@ -150,13 +164,14 @@ public class FTP_Client implements Runnable {
 
             try {
 
-                
+                Thread.currentThread().sleep(5000);
+                System.out.println("Current commnad: "+this.currentCommand);
+                System.out.println("split array: "+this.commandSplitArray[0].toString());
+
                 this.outputStreamObj= new ObjectOutputStream(this.clientNormalPortSocket.getOutputStream());
 
-                //Switch if its a valid command
-		Commands currentCommand = Commands.valueOf((String)this.commandSplitArray[0]);
-
-                switch (currentCommand) {
+                
+                switch (this.currentCommand) {
 
 			case ls:
 			case mkdir:
@@ -164,6 +179,7 @@ public class FTP_Client implements Runnable {
 			case delete:
 			case cd:
                         case get:
+                                System.out.println("in case: "+this.currentCommand);
                                 //Send the data to the Server
 				this.outputStreamObj.writeObject(this.commandSplitArray);
                                 this.outputStreamObj.flush();
@@ -198,7 +214,7 @@ public class FTP_Client implements Runnable {
 
 		} catch (Exception e) {
                     this.printStream("Invalid command entered!!!",true);
-                    //e.printStackTrace();
+                    e.printStackTrace();
                 }
             return commandResult;
              
@@ -359,15 +375,13 @@ public class FTP_Client implements Runnable {
          try{
                 this.inputStreamObj = new ObjectInputStream(this.clientNormalPortSocket.getInputStream());
                 
-                //Switch if its a valid command
-		Commands currentCommand = Commands.valueOf((String)this.commandSplitArray[0]);
-
                 /**
                  * Parse and display the response sent from Sever
                  * based on the type of the response is expected.
                  *
                  */
-                switch(currentCommand){
+                System.out.println("jgjgj"+this.currentCommand);
+                switch(this.currentCommand){
 
                     case ls:  this.parseLsResponse(this.inputStreamObj);
                               break;
@@ -436,13 +450,16 @@ public class FTP_Client implements Runnable {
         try {
 
             //if (!this) {
+                //Switch if its a valid command
+             System.out.println("tadada1: "+this.commandSplitArray[0].toString());
+             
+             System.out.println("tadada2: "+this.currentCommand);
 
+               
                 if (this.validateCommandAndSendToServer()) {
-                        Thread.currentThread().sleep(20000);
-                        System.out.println("Before sending thread to sleep!!!");
-                        System.out.println("After waking up");
-                        System.out.println("Before processing the server response");
+                       
                         this.processServerResponse();
+                         Thread.currentThread().sleep(20000);
                 //        this.currentThread().interrupt();
                 //        this.currentThread().yield();
                         

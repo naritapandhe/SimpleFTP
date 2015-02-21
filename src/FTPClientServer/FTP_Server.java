@@ -69,6 +69,8 @@ public class FTP_Server implements Runnable  {
         terminate
     };
 
+    Commands currentCommand;
+
     
     //Default Constructor
     FTP_Server(int nPort, int tPort) {
@@ -178,6 +180,7 @@ public class FTP_Server implements Runnable  {
                  *
                  */
                 Object[] clientInput = (Object[]) inputObj;
+                System.out.println("fjfjfjfjfjfjblah: "+clientInput[0].toString());
                 this.clientCommand = clientInput[0].toString();
                 this.clientParams = (String) clientInput[1];
                 this.clientFileContents = clientInput[2];
@@ -210,10 +213,10 @@ public class FTP_Server implements Runnable  {
             String commandResult = null;
             ArrayList<String> lsResult = new ArrayList<String>();
             this.clientOutputObj = new ObjectOutputStream(this.clientNormalPortSocket.getOutputStream());
-            Commands currentCommand = Commands.valueOf(this.clientCommand);
+            //Commands currentCommand = Commands.valueOf(this.clientCommand);
 
             //Switch based on the command to be executed
-            switch (currentCommand) {
+            switch (this.currentCommand) {
 
                 case ls:
                     lsResult = this.executeLs();
@@ -250,6 +253,7 @@ public class FTP_Server implements Runnable  {
                     break;
 
                 case get:
+                    System.out.println("in case get!!!");
                     this.executeGet((String) this.clientParams);
                     break;
 
@@ -510,7 +514,7 @@ public class FTP_Server implements Runnable  {
                 byte[] fileBytes = new byte[FIXED_BUFFER_SIZE];
 
                 //Read the contents of a file in a buffer and send it to Client
-                while(true && !isFileSent){
+                while(true && !isFileSent && this.isAllowed(fileName, commandID)){
                     if(!commandIDSent){
 
                         
@@ -614,6 +618,13 @@ public class FTP_Server implements Runnable  {
         return terminate;
     }
 
+    /**
+     *
+     * Function to check whether a thread is terminated
+     * @param commandID
+     * @return boolean
+     */
+
     public boolean isTerminated(String commandID){
         
         boolean terminated=false;
@@ -631,18 +642,56 @@ public class FTP_Server implements Runnable  {
 
     }
 
+    /**
+     *
+     * Function to check whether the incoming thread is allowed
+     * to execute the get/put/delete on the file
+     *
+     * @String fileName
+     * @String inputCommand
+     * @return boolean
+     */
+    public boolean isAllowed(String fileName,String inputCommand){
+        boolean allowed=false;
+        try{
+            if(filesLocked.containsValue(fileName)){
+                Object key=this.getKeyFromValue(filesLocked, fileName);
+                String[] existingCommandIDArray=key.toString().split("_");
+                String[] inputCommandIDArray=inputCommand.split("_");
+                if((existingCommandIDArray[1].equals(inputCommandIDArray[1])) && (existingCommandIDArray[1].equals("1") && inputCommandIDArray[1].equals("1"))){
+                    allowed=true;
+                }
 
+            }else{
+                allowed=true;
+            }
+        }catch(Exception e){
+        }
+        return allowed;
+    }
+
+    public Object getKeyFromValue(ConcurrentMap hm, String value) {
+    for (Object o : hm.keySet()) {
+      if (hm.get(o).equals(value)) {
+        return o;
+      }
+    }
+    return null;
+   }
 
     public void run() {
         try {
 
                     this.readCommandFromClient();
+                    System.out.println("fjfjfjjfjf"+this.clientCommand);
+                    this.currentCommand = Commands.valueOf(this.clientCommand);
                     this.validateAndExecuteCommand();
 
            
         }catch (Exception e) {
 
             System.out.println("Done!!");
+            e.printStackTrace();
             
         }
   }
