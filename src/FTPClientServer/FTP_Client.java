@@ -438,6 +438,7 @@ public class FTP_Client implements Runnable {
             //if (!this) {
 
                 if (this.validateCommandAndSendToServer()) {
+                        Thread.currentThread().sleep(20000);
                         System.out.println("Before sending thread to sleep!!!");
                         System.out.println("After waking up");
                         System.out.println("Before processing the server response");

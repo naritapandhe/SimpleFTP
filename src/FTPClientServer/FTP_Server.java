@@ -8,6 +8,8 @@ import java.net.*;
 import java.io.*;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 //Server Class
 public class FTP_Server implements Runnable  {
@@ -43,7 +45,9 @@ public class FTP_Server implements Runnable  {
 
     //String commandID="1";
 
-    HashMap<String,String> filesLocked=new HashMap<String, String>();
+   // public volatile HashMap<String,String> filesLocked=new HashMap<String, String>();
+
+    public static ConcurrentMap<String,String> filesLocked = new ConcurrentHashMap<String,String>();
 
     String currentThreadID=null;
 
@@ -250,7 +254,6 @@ public class FTP_Server implements Runnable  {
                     break;
 
                 case terminate:
-                     this.filesLocked.put("1", "GET");
                      boolean terminateResult=this.executeTerminate(this.clientParams.toString());
                      if(terminateResult){
                          commandResult="Command terminated succesfully";
@@ -367,16 +370,14 @@ public class FTP_Server implements Runnable  {
         // If 'cd ..' command is to be exceuted, then point the working directory to parent
         if (dirName.equals("..")) {
             File fileObj = new File(System.getProperty("user.dir"));
-            System.setProperty("user.dir", fileObj.getAbsoluteFile().getParent());
-            result = "Directory changed to: " + System.getProperty("user.dir");
+            result = "Directory changed to: " + fileObj.getAbsoluteFile().getParent();
 
         } else {
 
             //If 'cd xxxx' is to be executed, then point to the directory name mentionsd
             File dirObj = new File(dirName);
             if (dirObj.exists()) {
-                System.setProperty("user.dir", dirObj.getAbsolutePath());
-                result = "Directory changed to: " + System.getProperty("user.dir");
+                result = "Directory changed to: " + dirObj.getAbsolutePath();
             } else {
                 result = "Directory not be found!!! Please try again";
             }
@@ -499,7 +500,7 @@ public class FTP_Server implements Runnable  {
 
             if (fileObj.exists()) {
 
-                this.filesLocked.put(commandID, fileName);
+                filesLocked.put(commandID, fileName);
                 
                 FileInputStream fileInputStreamObj = new FileInputStream(fileName);
                 int counter = 0;//used to track progress through upload
@@ -526,10 +527,10 @@ public class FTP_Server implements Runnable  {
 
                     }else{
 
-                      //  this.sleep(20000);
+                        Thread.currentThread().sleep(20000);
                         if(!this.isTerminated(commandID)){
 
-                        System.out.println("Sending the file contents now");
+                        System.out.println("Sending the file contents now: "+commandID);
 
                         int size=0;
 
@@ -563,6 +564,7 @@ public class FTP_Server implements Runnable  {
 
                         }else{
                             System.out.println("Client sent terminate signal");
+                            Thread.currentThread().interrupt();
                             return;
                         }
                         
@@ -589,19 +591,26 @@ public class FTP_Server implements Runnable  {
 
     }
 
+    /**
+     *
+     * Function to execute the Terminate command
+     * @String commandID: Command to terminate
+     * @return boolean
+     */
     public boolean executeTerminate(String commandID){
         boolean terminate=false;
 
         try{
 
-             if(this.filesLocked.containsKey(commandID)){
-                 this.filesLocked.remove(commandID);
+             if(filesLocked.containsKey(commandID)){
+                 filesLocked.remove(commandID);
+                 System.out.println("Command ID found!!!Removing corresponding thread from the map.");
                  terminate=true;
              }
         }catch(Exception e){
 
         }
-        System.out.println("File remove keli ka: "+terminate);
+        System.out.println("Is thread terminated: "+terminate);
         return terminate;
     }
 
@@ -610,7 +619,7 @@ public class FTP_Server implements Runnable  {
         boolean terminated=false;
         try{
 
-            if(!this.filesLocked.containsKey(commandID))
+            if(!filesLocked.containsKey(commandID))
              terminated=true;
              
         }catch(Exception e){
