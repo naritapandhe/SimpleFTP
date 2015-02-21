@@ -41,6 +41,12 @@ public class FTP_Server implements Runnable  {
 
      public static ConcurrentMap<String,String> filesLocked = new ConcurrentHashMap<String,String>();
 
+
+     static String GET_COMMAND_ID="1";
+     static String PUT_COMMAND_ID="2";
+     static String DELETE_COMMAND_ID="3";
+
+
     
     /**
      * Enumeration of all the allowed commands.
@@ -367,6 +373,9 @@ public class FTP_Server implements Runnable  {
      * @return String
      */
     public String executeDelete(String fileName) {
+        String commandID=this.currentThreadID+"_"+DELETE_COMMAND_ID;
+        System.out.println("Command ID: "+commandID);
+
         System.out.println("Executing delete...");
         String result = null;
 
@@ -378,9 +387,13 @@ public class FTP_Server implements Runnable  {
             result = "Directory / File does not exists!! Please try again.";
 
         } else if (fileObj.isFile()) {
+            if(this.isAllowed(fileName, commandID)){
             //If file exists, then delete the file
             fileObj.delete();
             result = "Directory / File has been deleted successfully.";
+            }else{
+                result = "Please try again after sometime";
+            }
 
         } else if (fileObj.isDirectory()) {
             /**
@@ -415,6 +428,10 @@ public class FTP_Server implements Runnable  {
         String result = null;
         try {
 
+            String commandID=this.currentThreadID+"_"+PUT_COMMAND_ID;
+            System.out.println("Command ID: "+commandID);
+
+            if(this.isAllowed(fileName, commandID)){
             FileOutputStream fileOutputStreamObject = new FileOutputStream(new File(System.getProperty("user.dir") + "/" + fileName));
             byte[] fileBytes = new byte[1024 * 1024];
 
@@ -433,6 +450,9 @@ public class FTP_Server implements Runnable  {
 
             //Close the stream
             fileOutputStreamObject.close();
+            }else{
+                result="Please try again after sometime!!!";
+            }
 
          } catch (Exception e) {
             result = "Some error occurred!!!Please try again";
@@ -450,7 +470,7 @@ public class FTP_Server implements Runnable  {
 
         try {
             int FIXED_BUFFER_SIZE=10;
-            String GET_COMMAND_ID="1";
+            
 
             boolean commandIDSent=false;
             String result = null;
@@ -526,6 +546,8 @@ public class FTP_Server implements Runnable  {
                             System.out.println("File sent successfully!!! Please verify at the client side");
 
                             this.clientOutputObj.reset();
+                            this.executeTerminate(commandID);
+
 
                         }
 
