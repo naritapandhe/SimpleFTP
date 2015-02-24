@@ -10,6 +10,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 //Server Class
 public class FTP_Server implements Runnable {
@@ -32,13 +35,18 @@ public class FTP_Server implements Runnable {
     ObjectInputStream inputStreamObj = null;
     ObjectOutputStream terminateClientOutputObj = null;
     ObjectInputStream terminateInputStreamObj = null;
-    public static ConcurrentMap<String, String> filesLocked = new ConcurrentHashMap<String, String>();
+    // public static ConcurrentMap<String, String> filesLocked = new ConcurrentHashMap<String, String>();
+    public static  HashMap<String, String> filesLocked = new HashMap<String, String>();
+    private final ReadWriteLock lock = new ReentrantReadWriteLock();
+    private final Lock readLock = lock.readLock();
+    private final Lock writeLock = lock.writeLock();
     static String GET_COMMAND_ID = "1";
     static String PUT_COMMAND_ID = "2";
     static String DELETE_COMMAND_ID = "3";
     int receivedFileSize = 0;
     int totalFileSize = 0;
-String currentFileName=null;
+    String currentFileName = null;
+
     /**
      * Enumeration of all the allowed commands.
      *
@@ -161,7 +169,6 @@ String currentFileName=null;
             this.clientFileContents = clientInput[2];
 
             }*/
-
             this.currentCommand = Commands.valueOf(this.clientCommand);
             System.out.println("\n\nCommand received from Client: '" + this.clientCommand + "'");
             System.out.println("Parameters received from Client: '" + this.clientParams + "'");
@@ -218,11 +225,11 @@ String currentFileName=null;
                     this.clientOutputObj.writeObject(commandResult);
                     break;
 
-               /* case put:
-                    this.currentFileName=(String) this.clientParams;
-                    commandResult=this.executePut((String) this.clientParams);
-                    System.out.println(commandResult);
-                    break;*/
+                /* case put:
+                this.currentFileName=(String) this.clientParams;
+                commandResult=this.executePut((String) this.clientParams);
+                System.out.println(commandResult);
+                break;*/
 
                 case get:
                     this.executeGet((String) this.clientParams);
@@ -424,93 +431,92 @@ String currentFileName=null;
      * @return
      */
     /*public String executePut(String fileName) {
-        System.out.println("Executing put...");
-        String result = null;
+    System.out.println("Executing put...");
+    String result = null;
 
-        try {
+    try {
 
-            int FIXED_BUFFER_SIZE = 10;
-            byte[] fileBytes = null;
-            boolean isFileRecieved = false;
-            boolean isCommandIDSent = false;
-
-
-            while (true && !isFileRecieved) {
-
-                if (!isCommandIDSent) {
-
-                    String commandID = this.currentThreadID + "_" + PUT_COMMAND_ID;
-                    result = commandID;
-                    byte[] commandIDBytes = result.getBytes("UTF-8");
-                    this.clientOutputObj.writeObject(commandIDBytes);
-                    isCommandIDSent = true;
-                    System.out.println("Command ID sent!!" + result);
-
-                    //Flush the stream
-                    this.clientOutputObj.flush();
-                    this.clientOutputObj.reset();
+    int FIXED_BUFFER_SIZE = 10;
+    byte[] fileBytes = null;
+    boolean isFileRecieved = false;
+    boolean isCommandIDSent = false;
 
 
-                }else{
+    while (true && !isFileRecieved) {
 
-                if (this.receivedFileSize < this.totalFileSize) {
+    if (!isCommandIDSent) {
 
-                    Thread.currentThread().sleep(1000);
-                    this.inputStreamObj = new ObjectInputStream(this.clientNormalPortSocket.getInputStream());
-                    FileOutputStream fileOutputStreamObject;
-                    File f = new File(System.getProperty("user.dir") + "/" + fileName);
-                    if (f.exists()) {
-                        fileOutputStreamObject = new FileOutputStream(f, true);
-                    } else {
-                        fileOutputStreamObject = new FileOutputStream(f);
-                    }
+    String commandID = this.currentThreadID + "_" + PUT_COMMAND_ID;
+    result = commandID;
+    byte[] commandIDBytes = result.getBytes("UTF-8");
+    this.clientOutputObj.writeObject(commandIDBytes);
+    isCommandIDSent = true;
+    System.out.println("Command ID sent!!" + result);
 
-                    System.out.println("Now receiving the file contents....");
-                    Object fileContents1 = this.inputStreamObj.readObject();
-                    if (((byte[]) fileContents1).length == FIXED_BUFFER_SIZE) {
-                        fileBytes = new byte[FIXED_BUFFER_SIZE];
-
-                    } else {
-                        fileBytes = new byte[((byte[]) fileContents1).length];
-                        isFileRecieved = true;
+    //Flush the stream
+    this.clientOutputObj.flush();
+    this.clientOutputObj.reset();
 
 
-                    }
-                    this.receivedFileSize += fileBytes.length;
-                    fileBytes = (byte[]) fileContents1;
-                    System.out.println(this.receivedFileSize+" bytes written.");
+    }else{
 
-                    //Write the contents to the file
-                    fileOutputStreamObject.write(fileBytes);
+    if (this.receivedFileSize < this.totalFileSize) {
 
-                    //Close the stream
-                    fileOutputStreamObject.flush();
+    Thread.currentThread().sleep(1000);
+    this.inputStreamObj = new ObjectInputStream(this.clientNormalPortSocket.getInputStream());
+    FileOutputStream fileOutputStreamObject;
+    File f = new File(System.getProperty("user.dir") + "/" + fileName);
+    if (f.exists()) {
+    fileOutputStreamObject = new FileOutputStream(f, true);
+    } else {
+    fileOutputStreamObject = new FileOutputStream(f);
+    }
 
-                    if (isFileRecieved) {
-                        result = "File received successfully!!!";
-                        return result;
+    System.out.println("Now receiving the file contents....");
+    Object fileContents1 = this.inputStreamObj.readObject();
+    if (((byte[]) fileContents1).length == FIXED_BUFFER_SIZE) {
+    fileBytes = new byte[FIXED_BUFFER_SIZE];
 
-                    }
-
-                } else {
-
-                    isFileRecieved = true;
-                    result = "Finished receiving file contents";
-                    return result;
+    } else {
+    fileBytes = new byte[((byte[]) fileContents1).length];
+    isFileRecieved = true;
 
 
-                }
-            }
-            }
+    }
+    this.receivedFileSize += fileBytes.length;
+    fileBytes = (byte[]) fileContents1;
+    System.out.println(this.receivedFileSize+" bytes written.");
 
-        } catch (Exception e) {
-            result = "Some error occurred!!!Please try again";
-            e.printStackTrace();
-        }
+    //Write the contents to the file
+    fileOutputStreamObject.write(fileBytes);
 
-        return result;
+    //Close the stream
+    fileOutputStreamObject.flush();
+
+    if (isFileRecieved) {
+    result = "File received successfully!!!";
+    return result;
+
+    }
+
+    } else {
+
+    isFileRecieved = true;
+    result = "Finished receiving file contents";
+    return result;
+
+
+    }
+    }
+    }
+
+    } catch (Exception e) {
+    result = "Some error occurred!!!Please try again";
+    e.printStackTrace();
+    }
+
+    return result;
     }*/
-
     /**
      * Function to execute the 'get' command
      * i.e. Send to Client
@@ -538,7 +544,13 @@ String currentFileName=null;
 
                 if (this.isAllowed(fileName, commandID)) {
 
-                    filesLocked.put(commandID, fileName);
+                    writeLock.lock();
+                    try {
+                        filesLocked.put(commandID, fileName);
+                    } finally {
+                        writeLock.unlock();
+                    }
+
 
                     FileInputStream fileInputStreamObj = new FileInputStream(fileName);
                     int counter = 0;//used to track progress through upload
@@ -565,7 +577,7 @@ String currentFileName=null;
 
                         } else {
 
-                            Thread.currentThread().sleep(10000);
+                            Thread.currentThread().sleep(15000);
                             if (!this.isTerminated(commandID)) {
 
                                 System.out.println("Sending the file contents now: " + commandID);
@@ -652,12 +664,16 @@ String currentFileName=null;
 
         try {
 
+            writeLock.lock();
             if (filesLocked.containsKey(commandID)) {
                 filesLocked.remove(commandID);
                 System.out.println("Command ID found!!!Removing corresponding thread from the map.");
                 terminate = true;
             }
         } catch (Exception e) {
+        } finally {
+
+            writeLock.unlock();
         }
         System.out.println("Is thread terminated: " + terminate);
         return terminate;
@@ -674,11 +690,15 @@ String currentFileName=null;
         boolean terminated = false;
         try {
 
+            readLock.lock();
             if (!filesLocked.containsKey(commandID)) {
                 terminated = true;
             }
 
         } catch (Exception e) {
+        } finally {
+
+            readLock.unlock();
         }
 
         System.out.println("Terminate current status: " + terminated);
@@ -698,8 +718,9 @@ String currentFileName=null;
     public boolean isAllowed(String fileName, String inputCommand) {
         boolean allowed = false;
         try {
+            readLock.lock();
             if (filesLocked.containsValue(fileName)) {
-                Object key = this.getKeyFromValue(filesLocked, fileName);
+                Object key = this.getKeyFromValue(fileName);
                 String[] existingCommandIDArray = key.toString().split("_");
                 String[] inputCommandIDArray = inputCommand.split("_");
                 if ((existingCommandIDArray[1].equals(inputCommandIDArray[1])) && (existingCommandIDArray[1].equals("1") && inputCommandIDArray[1].equals("1"))) {
@@ -710,16 +731,24 @@ String currentFileName=null;
                 allowed = true;
             }
         } catch (Exception e) {
+        } finally {
+            readLock.unlock();
         }
         System.out.println("Is allowed: " + allowed);
         return allowed;
     }
 
-    public Object getKeyFromValue(ConcurrentMap hm, String value) {
-        for (Object o : hm.keySet()) {
-            if (hm.get(o).equals(value)) {
-                return o;
+    public Object getKeyFromValue(String value) {
+        try {
+            readLock.lock();
+            for (Object o : filesLocked.keySet()) {
+                if (filesLocked.get(o).equals(value)) {
+                    return o;
+                }
             }
+        } catch (Exception e) {
+        } finally {
+            readLock.unlock();
         }
         return null;
     }
