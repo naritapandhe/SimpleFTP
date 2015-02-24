@@ -250,6 +250,7 @@ public class FTP_Client implements Runnable {
 
                             //Send the file name and command to the server
                             this.commandSplitArray[1] = originalFileName;
+                            this.commandSplitArray[3]=Integer.toString(fsize);
                             this.outputStreamObj.writeObject(this.commandSplitArray);
                             this.outputStreamObj.flush();
 
