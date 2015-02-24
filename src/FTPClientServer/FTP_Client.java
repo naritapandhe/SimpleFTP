@@ -22,8 +22,13 @@ public class FTP_Client implements Runnable {
      */
     static String serverAddress;
     String inputCommand;
+    String currentCommandID=null;
     static int serverNormalPort;
     static int serverTerminatePort;
+
+    int totalFileSize=0;
+    int currentFileSize=0;
+    
     Socket clientNormalPortSocket;
     Socket clientTerminatePortSocket;
     String[] commandSplitArray;
@@ -33,6 +38,12 @@ public class FTP_Client implements Runnable {
     ObjectInputStream terminateiInputStreamObj = null;
     Commands currentCommand;
     public static ConcurrentMap<String, String> filesLocked = new ConcurrentHashMap<String, String>();
+
+
+    static String GET_COMMAND_ID = "1";
+    static String PUT_COMMAND_ID = "2";
+    static String DELETE_COMMAND_ID = "3";
+
 
     /**
      * Enumeration of all the allowed commands.
@@ -197,11 +208,21 @@ public class FTP_Client implements Runnable {
                     break;
 
                 case terminate:
+                    String cmd=this.commandSplitArray[1].split("_")[1];
+                    if(cmd.equals(GET_COMMAND_ID)){
                     this.terminateOutputStreamObj = new ObjectOutputStream(this.clientTerminatePortSocket.getOutputStream());
                     this.terminateOutputStreamObj.writeObject(this.commandSplitArray);
                     this.outputStreamObj.writeObject(null);
                     this.terminateOutputStreamObj.flush();
                     commandResult = true;
+                    }else if(cmd.equals(PUT_COMMAND_ID)){
+                        System.out.println("in execute put terminate");
+                        /*if(this.executeTerminate(this.commandSplitArray[1])){
+                            System.out.println("Command terminated successfully!!");
+                        }else{
+                            System.out.println("There was some problem in terminating the command. Please try again!!");
+                        }*/
+                    }
                     break;
 
                 default:
@@ -238,19 +259,18 @@ public class FTP_Client implements Runnable {
 
             if (fileObject.exists()) {
 
-                //if (this.isAllowed(this.commandSplitArray[1], this.commandSplitArray[0])) {
-
                     FileInputStream fileInputStreamObj = new FileInputStream(this.commandSplitArray[1]);
                     int fsize = (int) fileInputStreamObj.getChannel().size();
                     byte[] fileBytes = new byte[FIXED_BUFFER_SIZE];
 
-                    while (true && !isFileSent && !Thread.currentThread().interrupted()) {
+                    while (true && !isFileSent && !Thread.currentThread().interrupted() && this.isAllowed(fullFileName, this.currentCommandID)) {
 
                         if (!isCommandIDReceived) {
 
                             //Send the file name and command to the server
                             this.commandSplitArray[1] = originalFileName;
                             this.commandSplitArray[3]=Integer.toString(fsize);
+                            this.totalFileSize=fsize;
                             this.outputStreamObj.writeObject(this.commandSplitArray);
                             this.outputStreamObj.flush();
 
@@ -263,6 +283,7 @@ public class FTP_Client implements Runnable {
                             fileBytes = (byte[]) inputFileContents;
                             putCommandID = new String(fileBytes);
                             this.printStream("Command ID: " + putCommandID, true);
+                            this.currentCommandID=putCommandID;
 
                             System.out.println("befpre pushing!!");
                             Set setOfKeys = filesLocked.keySet();
@@ -284,10 +305,6 @@ public class FTP_Client implements Runnable {
 
                              }
                             filesLocked.put(putCommandID, fullFileName);
-
-
-
-
                             isCommandIDReceived = true;
 
                             Thread.currentThread().sleep(2000);
@@ -297,7 +314,7 @@ public class FTP_Client implements Runnable {
                         } else {
 
                             Thread.currentThread().sleep(10000);
-                            //if (this.isTerminated(putCommandID)) {
+                            if (!this.isTerminated(this.currentCommandID) && this.currentFileSize <= this.totalFileSize) {
                                 this.outputStreamObj = new ObjectOutputStream(this.clientNormalPortSocket.getOutputStream());
 
                                 int size = 0;
@@ -305,6 +322,8 @@ public class FTP_Client implements Runnable {
 
                                 if (fsize > (iteration * FIXED_BUFFER_SIZE)) {
                                     size = FIXED_BUFFER_SIZE;
+                                    this.currentFileSize+=size;
+                                    
                                     fileBytes = new byte[size];
                                     fileInputStreamObj.read(fileBytes);
 
@@ -312,12 +331,14 @@ public class FTP_Client implements Runnable {
 
                                     //Flush the stream
                                     this.outputStreamObj.flush();
-
+                                    
 
 
                                 } else {
 
                                     size = fsize - ((iteration - 1) * FIXED_BUFFER_SIZE);
+                                    this.currentFileSize+=size;
+
                                     isFileSent = true;
                                     fileBytes = new byte[size];
                                     fileInputStreamObj.read(fileBytes);
@@ -331,18 +352,18 @@ public class FTP_Client implements Runnable {
 
                                 }
                                 iteration++;
-                           // }
+                            }else{
 
+                                 isFileSent=true;
+                                 System.out.println("Transfer terminated!!");
+                                 return false;
+                            }
+                       
                         }
 
                     }
 
-                /*}else{
-                     System.out.println("Please try again after sometime.");
-                     Thread.currentThread().interrupt();
-                     return false;
-                }*/
-
+                
 
             } else {
                 System.out.println("File not found!!!Please try again");
@@ -531,7 +552,7 @@ public class FTP_Client implements Runnable {
         return terminate;
     }
 
-    /**
+     /**
      *
      * Function to check whether a thread is terminated
      * @param commandID
@@ -553,8 +574,8 @@ public class FTP_Client implements Runnable {
         return terminated;
 
     }
-
-    /**
+    
+     /**
      *
      * Function to check whether the incoming thread is allowed
      * to execute the get/put/delete on the file
@@ -566,8 +587,47 @@ public class FTP_Client implements Runnable {
     public boolean isAllowed(String fileName, String inputCommand) {
         boolean allowed = false;
         try {
-            if (!filesLocked.containsValue(fileName)) {
+             Set setOfKeys = filesLocked.keySet();
+                            Iterator iterator = setOfKeys.iterator();
+                            while (iterator.hasNext()) {
+                            /**
+                             * next() method returns the next key from Iterator instance.
+                             * return type of next() method is Object so we need to do DownCasting to String
+                             */
+                            String key = (String) iterator.next();
+
+                            /**
+                             * once we know the 'key', we can get the value from the HashMap
+                             * by calling get() method
+                             */
+                             String value = filesLocked.get(key);
+
+                            System.out.println("Key: "+ key+", Value: "+ value);
+
+                             }
+
+            System.out.println("File name: "+fileName);
+            if (filesLocked.containsValue(fileName)) {
+                Object key = this.getKeyFromValue(fileName);
+                String[] existingCommandID = key.toString().split("_");
+                System.out.println("Existting coomad: "+existingCommandID[0]+":"+existingCommandID[1]);
+
+                String[] inputCommandID=null;
+                if(inputCommand!=null){
+                    inputCommandID = inputCommand.split("_");
+                }
+                System.out.println("Input coomad: "+inputCommandID[0]+":"+inputCommandID[1]);
+
+                if ((existingCommandID[0].equals(inputCommandID[0])) && (existingCommandID[1].equals("2") && inputCommandID[1].equals("2"))) {
+                    allowed = true;
+                }else{
+                    allowed = false;
+                    System.out.println("Not allowed!!!");
+                }
+
+            }else{
                 allowed = true;
+
             }
         } catch (Exception e) {
         }
@@ -575,13 +635,16 @@ public class FTP_Client implements Runnable {
         return allowed;
     }
 
-    public Object getKeyFromValue(ConcurrentMap hm, String value) {
-        for (Object o : hm.keySet()) {
-            if (hm.get(o).equals(value)) {
+
+    public Object getKeyFromValue(String value) {
+        for (Object o : filesLocked.keySet()) {
+            if (filesLocked.get(o).equals(value)) {
+                System.out.println("Before returning from getvale: "+o);
                 return o;
             }
         }
-        return null;
+
+               return null;
     }
 
     public void run() {

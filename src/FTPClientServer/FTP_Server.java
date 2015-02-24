@@ -36,6 +36,8 @@ public class FTP_Server implements Runnable {
     static String GET_COMMAND_ID = "1";
     static String PUT_COMMAND_ID = "2";
     static String DELETE_COMMAND_ID = "3";
+    int receivedFileSize = 0;
+    int totalFileSize = 0;
 
     /**
      * Enumeration of all the allowed commands.
@@ -134,6 +136,12 @@ public class FTP_Server implements Runnable {
                     this.clientParams = (String) clientInput[1];
                 }
 
+                if (clientInput.length > 3 && clientInput[3] != null) {
+
+                    this.totalFileSize = Integer.parseInt(clientInput[3]);
+                }
+
+
 
             } /*else {
 
@@ -211,7 +219,8 @@ public class FTP_Server implements Runnable {
                     break;
 
                 case put:
-                    this.executePut((String) this.clientParams);
+                    commandResult=this.executePut((String) this.clientParams);
+                    System.out.println(commandResult);
                     break;
 
                 case get:
@@ -441,47 +450,57 @@ public class FTP_Server implements Runnable {
                     this.clientOutputObj.reset();
 
 
-                }
+                }else{
 
-                Thread.currentThread().sleep(1000);
-                this.inputStreamObj = new ObjectInputStream(this.clientNormalPortSocket.getInputStream());
-                FileOutputStream fileOutputStreamObject;
-                File f = new File(System.getProperty("user.dir") + "/" + fileName);
-                if (f.exists()) {
-                    fileOutputStreamObject = new FileOutputStream(f, true);
+                if (this.receivedFileSize < this.totalFileSize) {
+
+                    Thread.currentThread().sleep(1000);
+                    this.inputStreamObj = new ObjectInputStream(this.clientNormalPortSocket.getInputStream());
+                    FileOutputStream fileOutputStreamObject;
+                    File f = new File(System.getProperty("user.dir") + "/" + fileName);
+                    if (f.exists()) {
+                        fileOutputStreamObject = new FileOutputStream(f, true);
+                    } else {
+                        fileOutputStreamObject = new FileOutputStream(f);
+                    }
+
+                    System.out.println("Now receiving the file contents....");
+                    Object fileContents1 = this.inputStreamObj.readObject();
+                    if (((byte[]) fileContents1).length == FIXED_BUFFER_SIZE) {
+                        fileBytes = new byte[FIXED_BUFFER_SIZE];
+
+                    } else {
+                        fileBytes = new byte[((byte[]) fileContents1).length];
+                        isFileRecieved = true;
+
+
+                    }
+                    this.receivedFileSize += fileBytes.length;
+                    fileBytes = (byte[]) fileContents1;
+                    System.out.println(this.receivedFileSize+" bytes written.");
+
+                    //Write the contents to the file
+                    fileOutputStreamObject.write(fileBytes);
+
+                    //Close the stream
+                    fileOutputStreamObject.flush();
+
+                    if (isFileRecieved) {
+                        result = "File received successfully!!!";
+                        return result;
+
+                    }
+
                 } else {
-                    fileOutputStreamObject = new FileOutputStream(f);
-                }
 
-                System.out.println("Now receiving the file contents....");
-                Object fileContents1 = this.inputStreamObj.readObject();
-                if (((byte[]) fileContents1).length == FIXED_BUFFER_SIZE) {
-                    fileBytes = new byte[FIXED_BUFFER_SIZE];
-
-                } else {
-                    fileBytes = new byte[((byte[]) fileContents1).length];
                     isFileRecieved = true;
-
-
-                }
-
-                fileBytes = (byte[]) fileContents1;
-                System.out.println("Wrote the file contents...");
-
-                //Write the contents to the file
-                fileOutputStreamObject.write(fileBytes);
-
-                //Close the stream
-                fileOutputStreamObject.flush();
-
-                if (isFileRecieved) {
-                    result = "File received successfully!!!";
+                    result = "Finished receiving file contents";
                     return result;
 
+
                 }
-
             }
-
+            }
 
         } catch (Exception e) {
             result = "Some error occurred!!!Please try again";
@@ -597,10 +616,10 @@ public class FTP_Server implements Runnable {
 
                     }
 
-                }else{
-                     System.out.println("Please try again after sometime.");
-                     Thread.currentThread().interrupt();
-                     return;
+                } else {
+                    System.out.println("Please try again after sometime.");
+                    Thread.currentThread().interrupt();
+                    return;
                 }
 
 
