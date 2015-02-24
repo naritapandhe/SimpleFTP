@@ -44,6 +44,8 @@ public class FTP_Client implements Runnable {
     static String PUT_COMMAND_ID = "2";
     static String DELETE_COMMAND_ID = "3";
 
+    String currentWorkingDir=null;
+
 
     /**
      * Enumeration of all the allowed commands.
@@ -192,7 +194,6 @@ public class FTP_Client implements Runnable {
 
                 case ls:
                 case mkdir:
-                case pwd:
                 case delete:
                 case cd:
                 case get:
@@ -202,6 +203,19 @@ public class FTP_Client implements Runnable {
                     commandResult = true;
                     break;
 
+                case pwd:
+                    if(this.currentWorkingDir!=null){
+                        this.printStream(this.currentWorkingDir,true);
+                        commandResult=false;
+                        
+                    }else{
+                        
+                         this.outputStreamObj.writeObject(this.commandSplitArray);
+                         this.outputStreamObj.flush();
+                         commandResult = true;
+                    }
+                   
+                    break;
 
                 /*case put:
                     this.uploadToServer();
@@ -475,6 +489,11 @@ public class FTP_Client implements Runnable {
                     this.parseLsResponse(this.inputStreamObj);
                     break;
 
+                case cd:
+                    this.currentWorkingDir=this.inputStreamObj.readObject().toString();
+                    System.out.println("Directory changed to: "+this.currentWorkingDir);
+                    break;
+                    
                 case get:
                     this.downloadFromServer(this.inputStreamObj, (String) this.commandSplitArray[1]);
                     break;

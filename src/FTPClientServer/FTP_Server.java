@@ -46,7 +46,7 @@ public class FTP_Server implements Runnable {
     int receivedFileSize = 0;
     int totalFileSize = 0;
     String currentFileName = null;
-
+   
     /**
      * Enumeration of all the allowed commands.
      *
@@ -351,14 +351,14 @@ public class FTP_Server implements Runnable {
         // If 'cd ..' command is to be exceuted, then point the working directory to parent
         if (dirName.equals("..")) {
             File fileObj = new File(System.getProperty("user.dir"));
-            result = "Directory changed to: " + fileObj.getAbsoluteFile().getParent();
+            result = fileObj.getAbsoluteFile().getParent();
 
         } else {
 
             //If 'cd xxxx' is to be executed, then point to the directory name mentionsd
             File dirObj = new File(dirName);
             if (dirObj.exists()) {
-                result = "Directory changed to: " + dirObj.getAbsolutePath();
+                result = dirObj.getAbsolutePath();
             } else {
                 result = "Directory not be found!!! Please try again";
             }
