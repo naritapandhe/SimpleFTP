@@ -203,9 +203,9 @@ public class FTP_Client implements Runnable {
                     break;
 
 
-                case put:
+                /*case put:
                     this.uploadToServer();
-                    break;
+                    break;*/
 
                 case terminate:
                     String cmd=this.commandSplitArray[1].split("_")[1];
@@ -651,6 +651,7 @@ public class FTP_Client implements Runnable {
         try {
 
 
+            synchronized(this){
             //Switch if its a valid command
             Thread.currentThread().sleep(1000);
             if (this.validateCommandAndSendToServer()) {
@@ -658,6 +659,7 @@ public class FTP_Client implements Runnable {
                 this.processServerResponse();
                 Thread.currentThread().sleep(2000);
 
+            }
             }
         } catch (Exception e) {
             e.printStackTrace();

@@ -38,7 +38,7 @@ public class FTP_Server implements Runnable {
     static String DELETE_COMMAND_ID = "3";
     int receivedFileSize = 0;
     int totalFileSize = 0;
-
+String currentFileName=null;
     /**
      * Enumeration of all the allowed commands.
      *
@@ -143,7 +143,7 @@ public class FTP_Server implements Runnable {
 
 
 
-            } /*else {
+            }
 
             /**
              * clientInput is an array consisting of the
@@ -218,10 +218,11 @@ public class FTP_Server implements Runnable {
                     this.clientOutputObj.writeObject(commandResult);
                     break;
 
-                case put:
+               /* case put:
+                    this.currentFileName=(String) this.clientParams;
                     commandResult=this.executePut((String) this.clientParams);
                     System.out.println(commandResult);
-                    break;
+                    break;*/
 
                 case get:
                     this.executeGet((String) this.clientParams);
@@ -422,7 +423,7 @@ public class FTP_Server implements Runnable {
      * @param fileName
      * @return
      */
-    public String executePut(String fileName) {
+    /*public String executePut(String fileName) {
         System.out.println("Executing put...");
         String result = null;
 
@@ -508,7 +509,7 @@ public class FTP_Server implements Runnable {
         }
 
         return result;
-    }
+    }*/
 
     /**
      * Function to execute the 'get' command
