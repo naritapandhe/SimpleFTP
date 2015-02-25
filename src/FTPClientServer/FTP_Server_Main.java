@@ -62,7 +62,7 @@ public class FTP_Server_Main {
 		FTP_Server serverObject;
                 while (true) {
 
-                    serverObject=new FTP_Server(ftpMain.serverNormalPortSocket.accept(),ftpMain.serverTerminatePortSocket.accept());
+                        serverObject=new FTP_Server(ftpMain.serverNormalPortSocket.accept(),ftpMain.serverTerminatePortSocket.accept());
                         Thread t=new Thread(serverObject);
                         serverObject.currentThreadID=Long.toString(t.getId());
                         t.start();;

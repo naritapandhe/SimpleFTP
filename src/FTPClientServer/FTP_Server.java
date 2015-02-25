@@ -35,7 +35,6 @@ public class FTP_Server implements Runnable {
     ObjectInputStream inputStreamObj = null;
     ObjectOutputStream terminateClientOutputObj = null;
     ObjectInputStream terminateInputStreamObj = null;
-    // public static ConcurrentMap<String, String> filesLocked = new ConcurrentHashMap<String, String>();
     public static HashMap<String, String> filesLocked = new HashMap<String, String>();
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
     private final Lock readLock = lock.readLock();
@@ -46,9 +45,9 @@ public class FTP_Server implements Runnable {
     int receivedFileSize = 0;
     int totalFileSize = 0;
     String currentFileName = null;
-    String currentCommandID=null;
+    String currentCommandID = null;
     Object mainData;
-
+    String currentWorkingDirectory=null;
 
     /**
      * Enumeration of all the allowed commands.
@@ -68,31 +67,6 @@ public class FTP_Server implements Runnable {
     Commands currentCommand;
 
     //Default Constructor
-    FTP_Server(int nPort, int tPort) {
-
-        try {
-
-            System.out.println("Server Running!!!!");
-
-            this.normalPort = nPort;
-            this.serverNormalPortSocket = new ServerSocket(this.normalPort);
-            System.out.println("To execute normal commands, please connect to the Server from Client using " + normalPort + " port.");
-
-            this.terminatePort = tPort;
-            this.serverTerminatePortSocket = new ServerSocket(this.terminatePort);
-            System.out.println("To terminate execution of commands, please connect to the terminate port: " + terminatePort);
-
-
-            this.currentCommand = null;
-
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
-    }
-
-    //Default Constructor
     FTP_Server(Socket normal, Socket terminate) {
 
         try {
@@ -110,24 +84,22 @@ public class FTP_Server implements Runnable {
 
     }
 
-    
     /**
      * Function to read the input sent from Client
      *
      */
     public void readCommandFromClient() {
-        boolean isThreadNeeded=false;
         try {
 
 
             Object inputObj = null;
-            this.inputStreamObj=new ObjectInputStream(this.clientNormalPortSocket.getInputStream());
+            this.inputStreamObj = new ObjectInputStream(this.clientNormalPortSocket.getInputStream());
             if ((inputObj = this.inputStreamObj.readObject()) == null) {
                 this.terminateInputStreamObj = new ObjectInputStream(this.clientTerminatePortSocket.getInputStream());
                 inputObj = this.terminateInputStreamObj.readObject();
 
             }
-            
+
             /**
              * inputObj can either be the buffered file contents(eg: put <fileName>)
              * or it can simply be a String of command to be executed (eg: ls)
@@ -145,66 +117,64 @@ public class FTP_Server implements Runnable {
                  */
                 String[] clientInput = (String[]) inputObj;
                 this.clientCommand = clientInput[0].toLowerCase();
+
+                //Store the params
                 if (clientInput.length > 1 && clientInput[1] != null) {
 
                     this.clientParams = (String) clientInput[1];
                 }
 
+                //Store the fileContents
+                if (clientInput.length > 2 && clientInput[2] != null) {
+                    this.clientFileContents = clientInput[2];
+                }
+
+                //Store the file size
                 if (clientInput.length > 3 && clientInput[3] != null) {
 
                     this.totalFileSize = Integer.parseInt(clientInput[3]);
                 }
-                if(clientInput.length>2 && clientInput[2]!=null){
-                    this.clientFileContents=clientInput[2];
+
+                if (clientInput.length > 6 && clientInput[6] != null) {
+
+                    this.currentWorkingDirectory = clientInput[6].toString();
                 }
-            
+                
+                
 
-
-            }else{
+            } else {
 
                 Object[] clientInput = (Object[]) inputObj;
-                System.out.println("fjfjfjfjfjfjblah: " + clientInput[0].toString());
                 this.clientCommand = clientInput[0].toString();
                 this.clientParams = (String) clientInput[1];
-                this.clientFileContents = clientInput[2];
+
+                //Store the fileContents
+                if (clientInput.length > 2 && clientInput[2] != null) {
+                    this.clientFileContents = clientInput[2];
+                }
+
+
+                //Store the file size
                 if (clientInput.length > 3 && clientInput[3] != null) {
 
                     this.totalFileSize = Integer.parseInt(clientInput[3].toString());
                 }
-                
+
             }
 
-            /**
-             * clientInput is an array consisting of the
-             * command, filename and the file contents as byte[]
-             * Eg: put <absolute_path> <file_contents>
-             * clientInput[0]: put
-             * clientInput[1]: <absolute_path>
-             * clientInput[2]: <file_contents>
-             *
-
-            Object[] clientInput = (Object[]) inputObj;
-            System.out.println("fjfjfjfjfjfjblah: " + clientInput[0].toString());
-            this.clientCommand = clientInput[0].toString();
-            this.clientParams = (String) clientInput[1];
-            this.clientFileContents = clientInput[2];
-
-            }*/
             this.currentCommand = Commands.valueOf(this.clientCommand);
             System.out.println("\n\nCommand received from Client: '" + this.clientCommand + "'");
             System.out.println("Parameters received from Client: '" + this.clientParams + "'");
-
-
 
         } catch (EOFException e) {
 
             System.out.println("Client exited!!!");
 
         } catch (Exception e) {
-            e.printStackTrace();
+            //e.printStackTrace();
         }
 
-        
+
     }
 
     /**
@@ -216,7 +186,6 @@ public class FTP_Server implements Runnable {
             String commandResult = null;
             ArrayList<String> lsResult = new ArrayList<String>();
             this.clientOutputObj = new ObjectOutputStream(this.clientNormalPortSocket.getOutputStream());
-
 
             //Switch based on the command to be executed
             switch (this.currentCommand) {
@@ -237,7 +206,14 @@ public class FTP_Server implements Runnable {
                     break;
 
                 case cd:
-                    commandResult = this.executeCd((String) this.clientParams);
+                    String fileName=null;
+                    if(this.clientParams.toString().equals("..") && this.currentWorkingDirectory!=null){
+                        fileName=this.currentWorkingDirectory;
+                        
+                    }else{
+                        fileName=this.clientParams.toString();
+                    }
+                    commandResult = this.executeCd(fileName);
                     this.clientOutputObj.writeObject(commandResult);
                     break;
 
@@ -246,10 +222,10 @@ public class FTP_Server implements Runnable {
                     this.clientOutputObj.writeObject(commandResult);
                     break;
 
-                
+
                 case put:
-                    this.currentFileName=(String) this.clientParams;
-                    commandResult=this.executePut((String) this.clientParams);
+                    this.currentFileName = (String) this.clientParams;
+                    commandResult = this.executePut((String) this.clientParams);
                     System.out.println(commandResult);
                     break;
 
@@ -266,6 +242,7 @@ public class FTP_Server implements Runnable {
                     }
                     this.clientOutputObj.writeObject(commandResult);
                     break;
+
                 default:
                     commandResult = "Invalid command!!! Please try again.";
                     break;
@@ -282,29 +259,6 @@ public class FTP_Server implements Runnable {
 
     }
 
-    public void executePut2() {
-        try {
-            String test="From Server";
-            System.out.println("Received cmdSplitArray1!!!"+this.clientCommand);
-            //this.clientOutputObj.writeObject(test);
-            //this.clientOutputObj.flush();
-
-            //while(true){
-
-                if(this.clientFileContents!=null){
-                //this.inputStreamObj=new ObjectInputStream(this.clientNormalPortSocket.getInputStream());
-                System.out.println("Receievd from client: "+this.clientFileContents);
-                }else{
-                    System.out.println("Receievd from client: "+this.clientCommand);
-                }
-
-            //}
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
     /**
      * Function to execute the 'ls' command
      * @ArrayList<String>
@@ -315,9 +269,14 @@ public class FTP_Server implements Runnable {
         ArrayList<String> fileList = new ArrayList<String>();
         try {
 
-            //Find the required directory
-            File fileObj = new File(System.getProperty("user.dir") + "/");
+            File fileObj;
+            if(this.clientParams!=null){
+                 fileObj= new File(this.clientParams.toString());
 
+            }else{
+                //Find the required directory
+                fileObj = new File(System.getProperty("user.dir") + "/");
+            }
             //Find the files present inside the directory
             File[] listOfFiles = fileObj.listFiles();
 
@@ -357,7 +316,7 @@ public class FTP_Server implements Runnable {
          * Obtain the fileHandle for that particular directory.
          * This is done to check if the directory already exists.
          */
-        File currentDirectory = new File(System.getProperty("user.dir") + "/" + dirName);
+        File currentDirectory = new File(dirName);
         try {
             boolean status = false;
 
@@ -395,7 +354,12 @@ public class FTP_Server implements Runnable {
         String result = null;
         // If 'cd ..' command is to be exceuted, then point the working directory to parent
         if (dirName.equals("..")) {
-            File fileObj = new File(System.getProperty("user.dir"));
+            File fileObj;
+            if(this.clientParams!=null){
+                fileObj = new File(this.clientParams.toString());
+            }else{
+                fileObj = new File(System.getProperty("user.dir"));
+            }
             result = fileObj.getAbsoluteFile().getParent();
 
         } else {
@@ -410,7 +374,6 @@ public class FTP_Server implements Runnable {
 
         }
 
-
         //Return the new working directory
         return result;
 
@@ -423,7 +386,6 @@ public class FTP_Server implements Runnable {
      */
     public String executeDelete(String fileName) {
         String commandID = this.currentThreadID + "_" + DELETE_COMMAND_ID;
-        System.out.println("Command ID: " + commandID);
 
         System.out.println("Executing delete...");
         String result = null;
@@ -481,89 +443,34 @@ public class FTP_Server implements Runnable {
 
         try {
 
-            int FIXED_BUFFER_SIZE = 10;
             byte[] fileBytes = null;
             boolean isFileRecieved = false;
-            boolean isCommandIDSent = false;
-
 
             while (true && !isFileRecieved) {
 
-                /*if (!isCommandIDSent) {
+                Thread.currentThread().sleep(1000);
+                FileOutputStream fileOutputStreamObject;
+                File f = new File(System.getProperty("user.dir") + "/" + fileName);
+                if (f.exists()) {
+                    fileOutputStreamObject = new FileOutputStream(f, true);
+                } else {
+                    fileOutputStreamObject = new FileOutputStream(f);
+                }
 
-                    String commandID = this.currentThreadID + "_" + PUT_COMMAND_ID;
-                    result = commandID;
-                    this.currentCommandID=commandID;
-                    
-                    byte[] commandIDBytes = result.getBytes("UTF-8");
+                fileBytes = new byte[this.totalFileSize];
+                fileBytes = (byte[]) this.clientFileContents;
+                //Write the bytes to the file
+                fileOutputStreamObject.write(fileBytes, 0, this.totalFileSize);
 
-                    this.clientOutputObj.writeObject(commandIDBytes);
-                    isCommandIDSent = true;
-                    System.out.println("Command ID sent!!" + result);
+                result = "File uploaded successfully!!!";
+                System.out.println(this.receivedFileSize + " bytes written.");
+                isFileRecieved = true;
 
-                    //Flush the stream
-                    this.clientOutputObj.flush();
-                    
-                    writeLock.lock();
-                    try {
-                        filesLocked.put(this.currentCommandID, fileName);
-                    } finally {
-                        writeLock.unlock();
-                    }
-
-
-
-                } else {*/
-
-                    //if (this.isAllowed(fileName, this.currentCommandID) && this.receivedFileSize < this.totalFileSize) {
-
-                        Thread.currentThread().sleep(1000);
-
-                        //this.inputStreamObj = new ObjectInputStream(this.clientNormalPortSocket.getInputStream());
-                        FileOutputStream fileOutputStreamObject;
-                        File f = new File(System.getProperty("user.dir") + "/" + fileName);
-                        if (f.exists()) {
-                            fileOutputStreamObject = new FileOutputStream(f, true);
-                        } else {
-                            fileOutputStreamObject = new FileOutputStream(f);
-                        }
-
-                        System.out.println("Now receiving the file contents....");
-                        /*Object fileContents1 = this.inputStreamObj.readObject();
-                        if (((byte[]) fileContents1).length == FIXED_BUFFER_SIZE) {
-                            fileBytes = new byte[FIXED_BUFFER_SIZE];
-
-                        } else {
-                            fileBytes = new byte[((byte[]) fileContents1).length];
-                            isFileRecieved = true;
-
-
-                        }
-                        this.receivedFileSize += fileBytes.length;*/
-                        fileBytes = new byte[this.totalFileSize];
-                        fileBytes = (byte[]) this.clientFileContents;
-                        //Write the bytes to the file
-                         fileOutputStreamObject.write(fileBytes, 0, this.totalFileSize);
-
-                        result = "File uploaded successfully!!!";
-                        System.out.println(this.receivedFileSize + " bytes written.");
-                        isFileRecieved = true;
-
-                        
-                    /*} else {
-
-                        i
-                        result = "Finished receiving file contents";
-                        return result;
-
-
-                    }*/
-                
             }
 
         } catch (Exception e) {
             result = "Some error occurred!!!Please try again";
-            e.printStackTrace();
+            // e.printStackTrace();
         }
 
         return result;
@@ -588,40 +495,35 @@ public class FTP_Server implements Runnable {
 
             int iteration = 1;
             boolean isFileSent = false;
-            String commandID = this.currentThreadID + "_" + GET_COMMAND_ID;
+            this.currentCommandID = this.currentThreadID + "_" + GET_COMMAND_ID;
 
-            System.out.println("Command ID: " + commandID);
 
             if (fileObj.exists()) {
 
-                if (this.isAllowed(fileName, commandID)) {
+                if (this.isAllowed(fileName, this.currentCommandID)) {
 
                     writeLock.lock();
                     try {
-                        filesLocked.put(commandID, fileName);
+                        filesLocked.put(this.currentCommandID, fileName);
                     } finally {
                         writeLock.unlock();
                     }
 
 
                     FileInputStream fileInputStreamObj = new FileInputStream(fileName);
-                    int counter = 0;//used to track progress through upload
                     int fsize = (int) fileInputStreamObj.getChannel().size();
 
 
                     byte[] fileBytes = new byte[FIXED_BUFFER_SIZE];
 
                     //Read the contents of a file in a buffer and send it to Client
-                    while (true && !isFileSent && !Thread.currentThread().interrupted()) {
+                    while (true && !isFileSent && !Thread.currentThread().isInterrupted()) {
                         if (!commandIDSent) {
 
-
-                            result = "CommandID:" + commandID;
+                            result = "CommandID:" + this.currentCommandID;
                             fileBytes = result.getBytes("UTF-8");
                             this.clientOutputObj.writeObject(fileBytes);
                             commandIDSent = true;
-
-                            System.out.println("Command ID sent!!");
 
                             //Flush the stream
                             this.clientOutputObj.flush();
@@ -630,12 +532,9 @@ public class FTP_Server implements Runnable {
                         } else {
 
                             Thread.currentThread().sleep(15000);
-                            if (!this.isTerminated(commandID)) {
-
-                                System.out.println("Sending the file contents now: " + commandID);
-
+                            if (!this.isTerminated(this.currentCommandID)) {
+                                System.out.println("Sending the file contents now...");
                                 int size = 0;
-
                                 if (fsize > (iteration * FIXED_BUFFER_SIZE)) {
                                     size = FIXED_BUFFER_SIZE;
                                     fileBytes = new byte[size];
@@ -663,7 +562,7 @@ public class FTP_Server implements Runnable {
                                     System.out.println("File sent successfully!!! Please verify at the client side");
 
                                     this.clientOutputObj.reset();
-                                    this.executeTerminate(commandID);
+                                    this.executeTerminate(this.currentCommandID);
 
 
                                 }
@@ -671,7 +570,12 @@ public class FTP_Server implements Runnable {
                                 iteration++;
 
                             } else {
+
                                 System.out.println("Client sent terminate signal");
+                                Thread.currentThread().interrupt();
+                                String terminateResponse = "TERMINATED";
+                                fileBytes = terminateResponse.getBytes();
+                                this.clientOutputObj.writeObject(fileBytes);
                                 Thread.currentThread().interrupt();
                                 return;
                             }
@@ -679,15 +583,13 @@ public class FTP_Server implements Runnable {
 
                         }
 
-                    }
+                    }//<while end>
 
                 } else {
                     System.out.println("Please try again after sometime.");
                     Thread.currentThread().interrupt();
                     return;
                 }
-
-
 
             } else {
 
@@ -715,11 +617,10 @@ public class FTP_Server implements Runnable {
         boolean terminate = false;
 
         try {
-
             writeLock.lock();
             if (filesLocked.containsKey(commandID)) {
                 filesLocked.remove(commandID);
-                System.out.println("Command ID found!!!Removing corresponding thread from the map.");
+                //System.out.println("Command ID found!!!Removing corresponding thread from the map.");
                 terminate = true;
             }
         } catch (Exception e) {
@@ -727,7 +628,7 @@ public class FTP_Server implements Runnable {
 
             writeLock.unlock();
         }
-        System.out.println("Is thread terminated: " + terminate);
+        // System.out.println("Is thread terminated: " + terminate);
         return terminate;
     }
 
@@ -753,7 +654,7 @@ public class FTP_Server implements Runnable {
             readLock.unlock();
         }
 
-        System.out.println("Terminate current status: " + terminated);
+        //System.out.println("Terminate current status: " + terminated);
         return terminated;
 
     }
@@ -786,7 +687,7 @@ public class FTP_Server implements Runnable {
         } finally {
             readLock.unlock();
         }
-        System.out.println("Is allowed: " + allowed);
+        // System.out.println("Is allowed: " + allowed);
         return allowed;
     }
 
@@ -813,10 +714,6 @@ public class FTP_Server implements Runnable {
 
 
         } catch (Exception e) {
-
-            System.out.println("Done!!");
-            e.printStackTrace();
-
         }
     }
 }
