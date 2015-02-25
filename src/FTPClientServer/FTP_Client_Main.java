@@ -84,6 +84,7 @@ public class FTP_Client_Main {
                         
                     }else{
                         if(client.validateCommandAndSendToServer()){
+
                             client.processServerResponse();
                         }
                     }
