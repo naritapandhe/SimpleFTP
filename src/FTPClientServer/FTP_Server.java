@@ -474,6 +474,8 @@ public class FTP_Server implements Runnable {
 
                     result = this.currentCommandID;
 
+                }else{
+                    result="Please try again after sometime!!!!";
                 }
             }else {
                 
@@ -711,10 +713,9 @@ public class FTP_Server implements Runnable {
                 Object key = this.getKeyFromValue(fileName);
                 String[] existingCommandIDArray = key.toString().split("_");
                 String[] inputCommandIDArray = inputCommand.split("_");
-                if ((existingCommandIDArray[1].equals(inputCommandIDArray[1])) && ((existingCommandIDArray[1].equals("1") && inputCommandIDArray[1].equals("1")) || (existingCommandIDArray[1].equals("2") && inputCommandIDArray[1].equals("2")))) {
+                if (existingCommandIDArray[1].equals(inputCommandIDArray[1]) && ((existingCommandIDArray[1].equals("1")) && (inputCommandIDArray[1].equals("1")))){
                     allowed = true;
                 }
-
             } else {
                 allowed = true;
             }
