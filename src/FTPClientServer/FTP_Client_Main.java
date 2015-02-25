@@ -68,7 +68,7 @@ public class FTP_Client_Main {
                 client.readCommandFromUser();
 
 
-                    if(client.commandSplitArray[0].equalsIgnoreCase("quit")){
+                    if(client.commandSplitArray[0].toString().equalsIgnoreCase("quit")){
 
                           client.outputStreamObj.close();
                           client.inputStreamObj.close();
@@ -78,7 +78,7 @@ public class FTP_Client_Main {
                           client.printStream("Disconnected from the Server.....",true);
                           System.exit(0);
 
-                    }else if(client.commandSplitArray[4]!=null && client.commandSplitArray[4].equalsIgnoreCase("&")){
+                    }else if(client.commandSplitArray[4]!=null && client.commandSplitArray[4].toString().equalsIgnoreCase("&")){
                         Thread testThread = new Thread(client);
                         testThread.start();
                         

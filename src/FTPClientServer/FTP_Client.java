@@ -8,10 +8,15 @@ import com.mysql.jdbc.StringUtils;
 import java.io.*;
 import java.net.*;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 //Client class
 public class FTP_Client implements Runnable {
@@ -22,30 +27,31 @@ public class FTP_Client implements Runnable {
      */
     static String serverAddress;
     String inputCommand;
-    String currentCommandID=null;
+    String currentCommandID = null;
     static int serverNormalPort;
     static int serverTerminatePort;
-
-    int totalFileSize=0;
-    int currentFileSize=0;
-    
+    int totalFileSize = 0;
+    int currentFileSize = 0;
     Socket clientNormalPortSocket;
     Socket clientTerminatePortSocket;
-    String[] commandSplitArray;
+    Object[] commandSplitArray;
     ObjectOutputStream outputStreamObj = null;
     ObjectInputStream inputStreamObj = null;
     ObjectOutputStream terminateOutputStreamObj = null;
     ObjectInputStream terminateiInputStreamObj = null;
     Commands currentCommand;
-    public static ConcurrentMap<String, String> filesLocked = new ConcurrentHashMap<String, String>();
 
+    public static volatile HashMap<String, String> filesLocked = new HashMap<String, String>();
 
     static String GET_COMMAND_ID = "1";
     static String PUT_COMMAND_ID = "2";
     static String DELETE_COMMAND_ID = "3";
+    String currentWorkingDir = null;
 
-    String currentWorkingDir=null;
-
+    private final ReadWriteLock lock = new ReentrantReadWriteLock();
+    private final Lock readLock = lock.readLock();
+    private final Lock writeLock = lock.writeLock();
+    
 
     /**
      * Enumeration of all the allowed commands.
@@ -140,7 +146,7 @@ public class FTP_Client implements Runnable {
 
             //Initialize the variables
             Thread.currentThread().sleep(1000);
-            this.commandSplitArray = new String[5];
+            this.commandSplitArray = new Object[8];
 
             // Split the sentence based on spaces
             String[] splittedCommand = new String[5];
@@ -162,8 +168,6 @@ public class FTP_Client implements Runnable {
              *  - If its a background process, it can be '&'.
              *    In this case '&' will be stored in commandSplitArray[4]
              *
-             *  - If its a normal command, the third param can either
-             *    be NULL or in case of GET / PUT: file contents
              */
             if (splittedCommand.length > 2 && splittedCommand[2] != null) {
                 //The second param is the absolute_path of the file or directory always
@@ -204,37 +208,42 @@ public class FTP_Client implements Runnable {
                     break;
 
                 case pwd:
-                    if(this.currentWorkingDir!=null){
-                        this.printStream(this.currentWorkingDir,true);
-                        commandResult=false;
-                        
-                    }else{
-                        
-                         this.outputStreamObj.writeObject(this.commandSplitArray);
-                         this.outputStreamObj.flush();
-                         commandResult = true;
+                    if (this.currentWorkingDir != null) {
+                        this.printStream(this.currentWorkingDir, true);
+                        commandResult = false;
+
+                    } else {
+
+                        this.outputStreamObj.writeObject(this.commandSplitArray);
+                        this.outputStreamObj.flush();
+                        commandResult = true;
                     }
-                   
+
                     break;
 
-                /*case put:
+                case put:
                     this.uploadToServer();
-                    break;*/
+                    break;
 
                 case terminate:
-                    String cmd=this.commandSplitArray[1].split("_")[1];
-                    if(cmd.equals(GET_COMMAND_ID)){
-                    this.terminateOutputStreamObj = new ObjectOutputStream(this.clientTerminatePortSocket.getOutputStream());
-                    this.terminateOutputStreamObj.writeObject(this.commandSplitArray);
-                    this.outputStreamObj.writeObject(null);
-                    this.terminateOutputStreamObj.flush();
-                    commandResult = true;
-                    }else if(cmd.equals(PUT_COMMAND_ID)){
-                        System.out.println("in execute put terminate");
+                    String cmd = this.commandSplitArray[1].toString().split("_")[1];
+                    if (cmd.equals(GET_COMMAND_ID)) {
+                        this.terminateOutputStreamObj = new ObjectOutputStream(this.clientTerminatePortSocket.getOutputStream());
+                        this.terminateOutputStreamObj.writeObject(this.commandSplitArray);
+                        this.outputStreamObj.writeObject(null);
+                        this.terminateOutputStreamObj.flush();
+                        commandResult = true;
+                    } else if (cmd.equals(PUT_COMMAND_ID)) {
+                        this.executeTerminate(this.currentCommandID);
+                        /*this.terminateOutputStreamObj = new ObjectOutputStream(this.clientTerminatePortSocket.getOutputStream());
+                        this.terminateOutputStreamObj.writeObject(this.commandSplitArray);
+                        this.outputStreamObj.writeObject(null);
+                        this.terminateOutputStreamObj.flush();*/
+                        commandResult = true;
                         /*if(this.executeTerminate(this.commandSplitArray[1])){
-                            System.out.println("Command terminated successfully!!");
+                        System.out.println("Command terminated successfully!!");
                         }else{
-                            System.out.println("There was some problem in terminating the command. Please try again!!");
+                        System.out.println("There was some problem in terminating the command. Please try again!!");
                         }*/
                     }
                     break;
@@ -256,6 +265,49 @@ public class FTP_Client implements Runnable {
 
     }
 
+    public void sendToServer(String x) {
+        try {
+
+            int FIXED_BUFFER_SIZE = 10;
+            System.out.println("Sedning to server...");
+            boolean isCommandIDReceived = false;
+            boolean isFileSent = false;
+
+            //File fileObject = new File(this.commandSplitArray[1].toString());
+            //String originalFileName = fileObject.getName();
+            String putCommandID = null;
+
+            //if (fileObject.exists()) {
+
+            //FileInputStream fileInputStreamObj = new FileInputStream(this.commandSplitArray[1].toString());
+            //int fsize = (int) fileInputStreamObj.getChannel().size();
+            //byte[] fileBytes = new byte[FIXED_BUFFER_SIZE];
+
+            while (true && !isFileSent) {
+
+
+                Thread.currentThread().sleep(5000);
+                System.out.println(x);
+                this.commandSplitArray[1] = "sample";
+                this.commandSplitArray[2] = x;
+                //this.commandSplitArray[3] = Integer.toString(fsize);
+                this.commandSplitArray[5] = "8_2";
+                this.commandSplitArray[6] = "C";
+
+                this.outputStreamObj.writeObject(this.commandSplitArray);
+                this.outputStreamObj.flush();
+
+
+
+                isFileSent = true;
+
+            }
+
+            //}
+        } catch (Exception e) {
+        }
+    }
+
     public boolean uploadToServer() {
 
         //Lakshat thev: To change it to 1000bytes
@@ -264,120 +316,129 @@ public class FTP_Client implements Runnable {
         boolean isCommandIDReceived = false;
 
         try {
-            String fullFileName=this.commandSplitArray[1];
-            File fileObject = new File(this.commandSplitArray[1]);
+
+            String fullFileName = this.commandSplitArray[1].toString();
+            File fileObject = new File(this.commandSplitArray[1].toString());
             String originalFileName = fileObject.getName();
             int iteration = 1;
             boolean isFileSent = false;
             String putCommandID = null;
 
+
+
             if (fileObject.exists()) {
 
-                    FileInputStream fileInputStreamObj = new FileInputStream(this.commandSplitArray[1]);
-                    int fsize = (int) fileInputStreamObj.getChannel().size();
-                    byte[] fileBytes = new byte[FIXED_BUFFER_SIZE];
 
-                    while (true && !isFileSent && !Thread.currentThread().interrupted() && this.isAllowed(fullFileName, this.currentCommandID)) {
+
+                FileInputStream fileInputStreamObj = new FileInputStream(this.commandSplitArray[1].toString());
+                int fsize = (int) fileInputStreamObj.getChannel().size();
+                //1MB cha main byte array
+                byte[] mainFileBytes = new byte[fsize];
+
+
+                Random rn = new Random();
+                int answer = rn.nextInt(10) + 1;
+
+                this.totalFileSize = fsize;
+                byte[] fileBytes = new byte[FIXED_BUFFER_SIZE];
+                this.currentCommandID = answer + "_" + PUT_COMMAND_ID;
+
+                if (this.isAllowed(fullFileName, this.currentCommandID)) {
+
+                    writeLock.lock();
+                    try {
+                        filesLocked.put(this.currentCommandID, fullFileName);
+                    } finally {
+                        writeLock.unlock();
+                    }
+
+                    while (true && !isFileSent && !Thread.currentThread().isInterrupted()) {
+
+                        Thread.currentThread().sleep(2000);
+
 
                         if (!isCommandIDReceived) {
 
                             //Send the file name and command to the server
-                            this.commandSplitArray[1] = originalFileName;
-                            this.commandSplitArray[3]=Integer.toString(fsize);
-                            this.totalFileSize=fsize;
-                            this.outputStreamObj.writeObject(this.commandSplitArray);
-                            this.outputStreamObj.flush();
-
-                            System.out.println("Waiting to receive CommandID from Server!!!");
-
-                            this.inputStreamObj = new ObjectInputStream(this.clientNormalPortSocket.getInputStream());
-                            Object inputFileContents = this.inputStreamObj.readObject();
-
-                            //Check if the Client has received the CommandID
-                            fileBytes = (byte[]) inputFileContents;
-                            putCommandID = new String(fileBytes);
-                            this.printStream("Command ID: " + putCommandID, true);
-                            this.currentCommandID=putCommandID;
-
-                            System.out.println("befpre pushing!!");
-                            Set setOfKeys = filesLocked.keySet();
-                            Iterator iterator = setOfKeys.iterator();
-                            while (iterator.hasNext()) {
-                            /**
-                             * next() method returns the next key from Iterator instance.
-                             * return type of next() method is Object so we need to do DownCasting to String
-                             */
-                            String key = (String) iterator.next();
-
-                            /**
-                             * once we know the 'key', we can get the value from the HashMap
-                             * by calling get() method
-                             */
-                             String value = filesLocked.get(key);
-
-                            System.out.println("Key: "+ key+", Value: "+ value);
-
-                             }
-                            filesLocked.put(putCommandID, fullFileName);
-                            isCommandIDReceived = true;
-
+                            this.commandSplitArray[5] = this.currentCommandID;
                             Thread.currentThread().sleep(2000);
-                            this.outputStreamObj.flush();
+                            isCommandIDReceived = true;
+                            this.printStream("Command ID: " + this.currentCommandID, true);
 
 
                         } else {
 
-                            Thread.currentThread().sleep(10000);
+                            System.out.println("Sending file contents...");
+                            
                             if (!this.isTerminated(this.currentCommandID) && this.currentFileSize <= this.totalFileSize) {
-                                this.outputStreamObj = new ObjectOutputStream(this.clientNormalPortSocket.getOutputStream());
+                                //this.outputStreamObj = new ObjectOutputStream(this.clientNormalPortSocket.getOutputStream());
 
                                 int size = 0;
-                                System.out.println("Sending file contents...");
 
                                 if (fsize > (iteration * FIXED_BUFFER_SIZE)) {
                                     size = FIXED_BUFFER_SIZE;
-                                    this.currentFileSize+=size;
-                                    
+
                                     fileBytes = new byte[size];
                                     fileInputStreamObj.read(fileBytes);
 
-                                    this.outputStreamObj.writeObject(fileBytes);
+                                    int start = 0;
 
-                                    //Flush the stream
-                                    this.outputStreamObj.flush();
-                                    
+                                    if (iteration == 1) {
+                                        start = 0;
+
+                                    } else {
+                                        start = ((iteration - 1) * FIXED_BUFFER_SIZE);
+
+                                    }
+                                    System.arraycopy(fileBytes, 0, mainFileBytes, start, size);
+                                    this.currentFileSize += size;
 
 
                                 } else {
 
                                     size = fsize - ((iteration - 1) * FIXED_BUFFER_SIZE);
-                                    this.currentFileSize+=size;
-
-                                    isFileSent = true;
+                                    this.currentFileSize += size;
                                     fileBytes = new byte[size];
                                     fileInputStreamObj.read(fileBytes);
 
-                                    //Send the commandSplitArray to the Server
-                                    this.outputStreamObj.writeObject(fileBytes);
-                                    //Flush the stream
-                                    this.outputStreamObj.flush();
+                                    int startx = (fsize - size);
+                                    System.arraycopy(fileBytes, 0, mainFileBytes, startx, size);
+                                    isFileSent = true;
 
-                                    System.out.println("File sent successfully!!! Please verify at the Server side");
 
                                 }
-                                iteration++;
-                            }else{
 
-                                 isFileSent=true;
-                                 System.out.println("Transfer terminated!!");
-                                 return false;
+                                System.out.println("No. of bytes sent: " + this.currentFileSize);
+                                iteration++;
+                                Thread.currentThread().sleep(10000);
+
+
+                                if (isFileSent) {
+                                    //Send the file name and command to the server
+                                    this.commandSplitArray[1] = originalFileName;
+                                    this.commandSplitArray[2] = mainFileBytes;
+                                    this.commandSplitArray[3] = Integer.toString(fsize);
+                                    this.commandSplitArray[5] = this.currentCommandID;
+
+                                    this.totalFileSize = fsize;
+                                    this.outputStreamObj.writeObject(this.commandSplitArray);
+                                    this.outputStreamObj.flush();
+
+                                }
+                            } else {
+
+                                isFileSent = true;
+                                Thread.currentThread().interrupt();
+                                System.out.println("Transfer terminated!!");
+                                return true;
                             }
-                       
+
                         }
+
 
                     }
 
-                
+                }
 
             } else {
                 System.out.println("File not found!!!Please try again");
@@ -490,10 +551,10 @@ public class FTP_Client implements Runnable {
                     break;
 
                 case cd:
-                    this.currentWorkingDir=this.inputStreamObj.readObject().toString();
-                    System.out.println("Directory changed to: "+this.currentWorkingDir);
+                    this.currentWorkingDir = this.inputStreamObj.readObject().toString();
+                    System.out.println("Directory changed to: " + this.currentWorkingDir);
                     break;
-                    
+
                 case get:
                     this.downloadFromServer(this.inputStreamObj, (String) this.commandSplitArray[1]);
                     break;
@@ -558,6 +619,7 @@ public class FTP_Client implements Runnable {
     public boolean executeTerminate(String commandID) {
         boolean terminate = false;
 
+        writeLock.lock();
         try {
 
             if (filesLocked.containsKey(commandID)) {
@@ -566,12 +628,15 @@ public class FTP_Client implements Runnable {
                 terminate = true;
             }
         } catch (Exception e) {
+        }finally{
+            writeLock.unlock();
+
         }
         System.out.println("Is thread terminated: " + terminate);
         return terminate;
     }
 
-     /**
+    /**
      *
      * Function to check whether a thread is terminated
      * @param commandID
@@ -580,6 +645,7 @@ public class FTP_Client implements Runnable {
     public boolean isTerminated(String commandID) {
 
         boolean terminated = false;
+        readLock.lock();
         try {
 
             if (!filesLocked.containsKey(commandID)) {
@@ -587,14 +653,16 @@ public class FTP_Client implements Runnable {
             }
 
         } catch (Exception e) {
+        }finally{
+            readLock.unlock();
         }
 
         System.out.println("Terminate current status: " + terminated);
         return terminated;
 
     }
-    
-     /**
+
+    /**
      *
      * Function to check whether the incoming thread is allowed
      * to execute the get/put/delete on the file
@@ -605,80 +673,63 @@ public class FTP_Client implements Runnable {
      */
     public boolean isAllowed(String fileName, String inputCommand) {
         boolean allowed = false;
+        readLock.lock();
         try {
-             Set setOfKeys = filesLocked.keySet();
-                            Iterator iterator = setOfKeys.iterator();
-                            while (iterator.hasNext()) {
-                            /**
-                             * next() method returns the next key from Iterator instance.
-                             * return type of next() method is Object so we need to do DownCasting to String
-                             */
-                            String key = (String) iterator.next();
-
-                            /**
-                             * once we know the 'key', we can get the value from the HashMap
-                             * by calling get() method
-                             */
-                             String value = filesLocked.get(key);
-
-                            System.out.println("Key: "+ key+", Value: "+ value);
-
-                             }
-
-            System.out.println("File name: "+fileName);
+            System.out.println("File name: " + fileName);
             if (filesLocked.containsValue(fileName)) {
                 Object key = this.getKeyFromValue(fileName);
                 String[] existingCommandID = key.toString().split("_");
-                System.out.println("Existting coomad: "+existingCommandID[0]+":"+existingCommandID[1]);
+                System.out.println("Existting coomad: " + existingCommandID[0] + ":" + existingCommandID[1]);
 
-                String[] inputCommandID=null;
-                if(inputCommand!=null){
+                String[] inputCommandID = null;
+                if (inputCommand != null) {
                     inputCommandID = inputCommand.split("_");
                 }
-                System.out.println("Input coomad: "+inputCommandID[0]+":"+inputCommandID[1]);
+                System.out.println("Input coomad: " + inputCommandID[0] + ":" + inputCommandID[1]);
 
-                if ((existingCommandID[0].equals(inputCommandID[0])) && (existingCommandID[1].equals("2") && inputCommandID[1].equals("2"))) {
+                if (!(existingCommandID[0].equals(inputCommandID[0]))) {
                     allowed = true;
-                }else{
+                } else {
                     allowed = false;
                     System.out.println("Not allowed!!!");
                 }
 
-            }else{
+            } else {
                 allowed = true;
 
             }
         } catch (Exception e) {
+        }finally{
+            readLock.unlock();
         }
         System.out.println("Is allowed: " + allowed);
         return allowed;
     }
 
-
     public Object getKeyFromValue(String value) {
         for (Object o : filesLocked.keySet()) {
             if (filesLocked.get(o).equals(value)) {
-                System.out.println("Before returning from getvale: "+o);
+                System.out.println("Before returning from getvale: " + o);
                 return o;
             }
         }
 
-               return null;
+        return null;
     }
 
     public void run() {
         try {
 
 
-            synchronized(this){
-            //Switch if its a valid command
-            Thread.currentThread().sleep(1000);
-            if (this.validateCommandAndSendToServer()) {
+            synchronized (this) {
+                //Switch if its a valid command
+                Thread.currentThread().sleep(1000);
+                if (this.validateCommandAndSendToServer()) {
 
-                this.processServerResponse();
-                Thread.currentThread().sleep(2000);
+                    this.processServerResponse();
+                    Thread.currentThread().sleep(2000);
 
-            }
+                }
             }
         } catch (Exception e) {
             e.printStackTrace();
