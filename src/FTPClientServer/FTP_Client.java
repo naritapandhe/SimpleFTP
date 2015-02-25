@@ -41,7 +41,7 @@ public class FTP_Client implements Runnable {
     ObjectInputStream terminateiInputStreamObj = null;
     Commands currentCommand;
 
-    public static volatile HashMap<String, String> filesLocked = new HashMap<String, String>();
+    public static HashMap<String, String> filesLocked;
 
     static String GET_COMMAND_ID = "1";
     static String PUT_COMMAND_ID = "2";
@@ -695,18 +695,15 @@ public class FTP_Client implements Runnable {
         boolean allowed = false;
         readLock.lock();
         try {
-            System.out.println("File name: " + fileName);
             if (filesLocked.containsValue(fileName)) {
                 Object key = this.getKeyFromValue(fileName);
                 String[] existingCommandID = key.toString().split("_");
-                System.out.println("Existing: "+existingCommandID[0]);
-
+               
                 String[] inputCommandID = null;
                 if (inputCommand != null) {
                     inputCommandID = inputCommand.split("_");
                 }
 
-                System.out.println("Input: "+inputCommandID[0]);
                 if ((inputCommandID!=null) && (existingCommandID[0].equals(inputCommandID[0]))) {
                     allowed = true;
 
@@ -723,7 +720,6 @@ public class FTP_Client implements Runnable {
         } finally {
             readLock.unlock();
         }
-        System.out.println("Is allowed: " + allowed);
         return allowed;
     }
 
@@ -732,7 +728,6 @@ public class FTP_Client implements Runnable {
             readLock.lock();
             for (Object o : filesLocked.keySet()) {
                 if (filesLocked.get(o).equals(value)) {
-                    System.out.println("Before returning from getvale: " + o);
                     return o;
                 }
             }

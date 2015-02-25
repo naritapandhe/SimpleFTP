@@ -8,6 +8,7 @@ package FTPClientServer;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
+import java.util.HashMap;
 
 /**
  *
@@ -54,6 +55,8 @@ public class FTP_Client_Main {
             {
                 
 		FTP_Client client=new FTP_Client(args[0],Integer.parseInt(args[1]),Integer.parseInt(args[2]));
+                
+                
                 System.out.println("Connecting to the server!!!!");
 
                 while(true){
