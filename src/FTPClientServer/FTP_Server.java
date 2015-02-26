@@ -252,7 +252,7 @@ public class FTP_Server implements Runnable {
                     if (terminateResult) {
                         commandResult = "Command terminated succesfully";
                     } else {
-                        commandResult = "Invalid command ID.";
+                        commandResult = "";
                     }
                     this.clientOutputObj.writeObject(commandResult);
                     break;
@@ -465,8 +465,8 @@ public class FTP_Server implements Runnable {
 
                 this.currentCommandID = Long.toString(Thread.currentThread().getId()) + "_" + PUT_COMMAND_ID;
                 if (this.isAllowed(this.clientCommandObject[1].toString(), this.currentCommandID)) {
+                    writeLock.lock();
                     try {
-                        writeLock.lock();
                         filesLocked.put(this.currentCommandID, this.clientCommandObject[1].toString());
                     } finally {
                         writeLock.unlock();
@@ -499,6 +499,7 @@ public class FTP_Server implements Runnable {
 
                     result = "File received successfully!!!";
                     isFileRecieved = true;
+                    this.executeTerminate(this.currentCommandID);
                    
                 }
 
@@ -506,6 +507,10 @@ public class FTP_Server implements Runnable {
 
 
         } catch (Exception e) {
+
+            if(this.currentCommandID!=null){
+                this.executeTerminate(this.currentCommandID);
+            }
             result = "Some error occurred!!!Please try again";
             // e.printStackTrace();
         }

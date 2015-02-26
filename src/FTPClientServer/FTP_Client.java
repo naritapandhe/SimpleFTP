@@ -42,7 +42,9 @@ public class FTP_Client implements Runnable {
     ObjectInputStream terminateiInputStreamObj = null;
     Commands currentCommand;
     //public static HashMap<String, String> filesLocked;
-    // public static ConcurrentHashMap<String, String> filesLocked=new ConcurrentHashMap<String,String>();
+
+    public static HashMap<String, String> filesLocked=new HashMap<String,String>();
+
     static String GET_COMMAND_ID = "1";
     static String PUT_COMMAND_ID = "2";
     static String DELETE_COMMAND_ID = "3";
@@ -305,8 +307,7 @@ public class FTP_Client implements Runnable {
             //Check if the file exists
             if (fileObject.exists()) {
 
-                readLock.tryLock();
-
+               
                 //Read the file
                 FileInputStream fileInputStreamObj = new FileInputStream(fullFileName);
                 int fsize = (int) fileInputStreamObj.getChannel().size();
@@ -326,7 +327,15 @@ public class FTP_Client implements Runnable {
                         this.printStream("Command ID: " + serverResponse, true);
                         isCommandIDReceived = true;
                         this.currentCommandID = serverResponse.toString();
-                        
+
+                        writeLock.lock();
+                        try{
+                            filesLocked.put(this.currentCommandID,originalFileName);
+                            
+                        }finally{
+                            writeLock.unlock();
+                        }
+                         
                     } else {
 
                         this.printStream(serverResponse.toString(), true);
@@ -336,8 +345,10 @@ public class FTP_Client implements Runnable {
 
                 }
 
-                while (true && !isFileSent && this.currentCommandID != null) {
+                while (true && !isFileSent && this.currentCommandID != null && !this.isTerminated(this.currentCommandID)) {
                     System.out.println("Sending file contents...");
+                     Thread.currentThread().sleep(7000);
+
 
                     if (this.currentFileSize <= this.totalFileSize) {
                     int size = 0;
@@ -383,6 +394,7 @@ public class FTP_Client implements Runnable {
                         this.outputStreamObj.flush();
 
                         System.out.println("Transfer completed!!!");
+                        this.executeTerminate(this.currentCommandID);
 
                         return true;
 
@@ -671,8 +683,8 @@ public class FTP_Client implements Runnable {
         writeLock.lock();
         try {
 
-            if (FTP_Client_Main.filesLocked.containsKey(commandID)) {
-                FTP_Client_Main.filesLocked.remove(commandID);
+            if (filesLocked.containsKey(commandID)) {
+                filesLocked.remove(commandID);
                 System.out.println("Command ID found!!!Removing corresponding thread from the map.");
                 terminate = true;
             }
@@ -697,7 +709,7 @@ public class FTP_Client implements Runnable {
         readLock.lock();
         try {
 
-            if (!FTP_Client_Main.filesLocked.containsKey(commandID)) {
+            if (!filesLocked.containsKey(commandID)) {
                 terminated = true;
             }
 
@@ -724,7 +736,7 @@ public class FTP_Client implements Runnable {
         boolean allowed = false;
         readLock.lock();
         try {
-            if (FTP_Client_Main.filesLocked.containsValue(fileName)) {
+            if (filesLocked.containsValue(fileName)) {
                 Object key = this.getKeyFromValue(fileName);
                 String[] existingCommandID = key.toString().split("_");
 
@@ -755,8 +767,8 @@ public class FTP_Client implements Runnable {
     public Object getKeyFromValue(String value) {
         try {
             readLock.lock();
-            for (Object o : FTP_Client_Main.filesLocked.keySet()) {
-                if (FTP_Client_Main.filesLocked.get(o).equals(value)) {
+            for (Object o : filesLocked.keySet()) {
+                if (filesLocked.get(o).equals(value)) {
                     return o;
                 }
             }
