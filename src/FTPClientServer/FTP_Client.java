@@ -42,9 +42,7 @@ public class FTP_Client implements Runnable {
     ObjectInputStream terminateiInputStreamObj = null;
     Commands currentCommand;
     //public static HashMap<String, String> filesLocked;
-
-    public static HashMap<String, String> filesLocked=new HashMap<String,String>();
-
+    public static HashMap<String, String> filesLocked = new HashMap<String, String>();
     static String GET_COMMAND_ID = "1";
     static String PUT_COMMAND_ID = "2";
     static String DELETE_COMMAND_ID = "3";
@@ -307,7 +305,7 @@ public class FTP_Client implements Runnable {
             //Check if the file exists
             if (fileObject.exists()) {
 
-               
+
                 //Read the file
                 FileInputStream fileInputStreamObj = new FileInputStream(fullFileName);
                 int fsize = (int) fileInputStreamObj.getChannel().size();
@@ -329,13 +327,13 @@ public class FTP_Client implements Runnable {
                         this.currentCommandID = serverResponse.toString();
 
                         writeLock.lock();
-                        try{
-                            filesLocked.put(this.currentCommandID,originalFileName);
-                            
-                        }finally{
+                        try {
+                            filesLocked.put(this.currentCommandID, originalFileName);
+
+                        } finally {
                             writeLock.unlock();
                         }
-                         
+
                     } else {
 
                         this.printStream(serverResponse.toString(), true);
@@ -345,115 +343,81 @@ public class FTP_Client implements Runnable {
 
                 }
 
-                while (true && !isFileSent && this.currentCommandID != null && !this.isTerminated(this.currentCommandID)) {
-                    System.out.println("Sending file contents...");
-                     Thread.currentThread().sleep(7000);
+                while (true && !isFileSent && this.currentCommandID != null && !Thread.currentThread().isInterrupted()) {
+
+                    if (!this.isTerminated(this.currentCommandID)) {
+
+                        System.out.println("Sending file contents...");
+                        Thread.currentThread().sleep(7000);
 
 
-                    if (this.currentFileSize <= this.totalFileSize) {
-                    int size = 0;
-                    if (fsize > (iteration * FIXED_BUFFER_SIZE)) {
-                        size = FIXED_BUFFER_SIZE;
-                        fileBytes = new byte[size];
-                        fileInputStreamObj.read(fileBytes);
-                        int start = 0;
-                        if (iteration == 1) {
-                            start = 0;
-                        } else {
-                            start = ((iteration - 1) * FIXED_BUFFER_SIZE);
+                        if (this.currentFileSize <= this.totalFileSize) {
+                            int size = 0;
+                            if (fsize > (iteration * FIXED_BUFFER_SIZE)) {
+                                size = FIXED_BUFFER_SIZE;
+                                fileBytes = new byte[size];
+                                fileInputStreamObj.read(fileBytes);
+                                int start = 0;
+                                if (iteration == 1) {
+                                    start = 0;
+                                } else {
+                                    start = ((iteration - 1) * FIXED_BUFFER_SIZE);
+                                }
+                                System.arraycopy(fileBytes, 0, mainFileBytes, start, size);
+                                this.currentFileSize += size;
+
+                            } else {
+
+                                size = fsize - ((iteration - 1) * FIXED_BUFFER_SIZE);
+                                this.currentFileSize += size;
+                                fileBytes = new byte[size];
+                                fileInputStreamObj.read(fileBytes);
+
+                                int startx = (fsize - size);
+                                System.arraycopy(fileBytes, 0, mainFileBytes, startx, size);
+                                isFileSent = true;
+                            }
+
+                            iteration++;
+                            Thread.currentThread().sleep(2000);
+
+                            if (isFileSent) {
+                                this.outputStreamObj = new ObjectOutputStream(this.clientNormalPortSocket.getOutputStream());
+
+                                this.commandSplitArray[1] = originalFileName;
+                                this.commandSplitArray[2] = mainFileBytes;
+                                this.commandSplitArray[3] = Integer.toString(fsize);
+                                this.commandSplitArray[5] = this.currentCommandID;
+
+                                //Write the contents to the file
+                                this.totalFileSize = fsize;
+                                this.outputStreamObj.writeObject(this.commandSplitArray);
+                                this.outputStreamObj.flush();
+
+                                System.out.println("Transfer completed!!!");
+                                this.executeTerminate(this.currentCommandID);
+
+                                return true;
+
+                            }
+
                         }
-                        System.arraycopy(fileBytes, 0, mainFileBytes, start, size);
-                        this.currentFileSize += size;
-
                     } else {
 
-                        size = fsize - ((iteration - 1) * FIXED_BUFFER_SIZE);
-                        this.currentFileSize += size;
-                        fileBytes = new byte[size];
-                        fileInputStreamObj.read(fileBytes);
-
-                        int startx = (fsize - size);
-                        System.arraycopy(fileBytes, 0, mainFileBytes, startx, size);
-                        isFileSent = true;
-                    }
-
-                    iteration++;
-                    Thread.currentThread().sleep(2000);
-
-                    if (isFileSent) {
-                        this.outputStreamObj = new ObjectOutputStream(this.clientNormalPortSocket.getOutputStream());
+                        Thread.currentThread().interrupt();
                         
-                        this.commandSplitArray[1] = originalFileName;
-                        this.commandSplitArray[2] = mainFileBytes;
-                        this.commandSplitArray[3] = Integer.toString(fsize);
-                        this.commandSplitArray[5] = this.currentCommandID;
-
-                        //Write the contents to the file
-                        this.totalFileSize = fsize;
-                        this.outputStreamObj.writeObject(this.commandSplitArray);
-                        this.outputStreamObj.flush();
-
-                        System.out.println("Transfer completed!!!");
-                        this.executeTerminate(this.currentCommandID);
-
-                        return true;
 
                     }
-//                    } else {
-//                    //File transfer terminated
-//                    isFileSent = true;
-//                    Thread.currentThread().interrupt();
-//                    System.out.println("Transfer terminated!!");
-//                    return true;
-//                    }
 
                 }
 
-            }
-
-
-
-            /*if (this.isAllowed(fullFileName, this.currentCommandID)) {
-
-            //Lock the Hash Map
-            //                        writeLock.lock();
-            //                        try {
-            //                            FTP_Client_Main.filesLocked.put(this.currentCommandID, fullFileName);
-            //                        } finally {
-            //                            writeLock.unlock();
-            //                        }
-
-            //Until the file is sent
-            while (true && !isFileSent && !Thread.currentThread().isInterrupted()) {
-
-            Thread.currentThread().sleep(2000);
-
-            //Check if Command ID is present
-            if (!isCommandIDReceived) {
-
-            //Send the file name and command to the server
-            this.commandSplitArray[5] = this.currentCommandID;
-            Thread.currentThread().sleep(2000);
-            isCommandIDReceived = true;
-            this.printStream("Command ID: " + this.currentCommandID, true);
-
 
             } else {
-
-             */
-
-
-            //  }//<While End>
-
-            //}//<isAllowed End>
-
-//                } else {
-//                    System.out.println("File not found!!!Please try again");
-//                    return false;
-//                }
-//
-//
+                System.out.println("File not found!!!Please try again");
+                return false;
             }
+
+
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -544,7 +508,6 @@ public class FTP_Client implements Runnable {
                     fileOutputStreamObject = null;
                     System.gc();
                     Thread.sleep(2000);
-
                     this.cleanUp(deleteFile);
                     return;
                 }
@@ -619,7 +582,7 @@ public class FTP_Client implements Runnable {
 
                 case put:
                     break;
-                    
+
                 default:
                     this.printStream(this.inputStreamObj.readObject().toString(), true);
                     break;
