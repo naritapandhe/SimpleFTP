@@ -8,11 +8,6 @@ import java.net.*;
 import java.io.*;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 //Server Class
 public class FTP_Server implements Runnable {
@@ -36,9 +31,6 @@ public class FTP_Server implements Runnable {
     ObjectOutputStream terminateClientOutputObj = null;
     ObjectInputStream terminateInputStreamObj = null;
     public static volatile HashMap<String, String> filesLocked = new HashMap<String, String>();
-    private final ReadWriteLock lock = new ReentrantReadWriteLock();
-    private final Lock readLock = lock.readLock();
-    private final Lock writeLock = lock.writeLock();
     static String GET_COMMAND_ID = "1";
     static String PUT_COMMAND_ID = "2";
     static String DELETE_COMMAND_ID = "3";
@@ -50,6 +42,8 @@ public class FTP_Server implements Runnable {
     String currentWorkingDirectory;
     String[] clientCommandString;
     Object[] clientCommandObject;
+    public static volatile boolean isLocked = false;
+    public static volatile boolean isSchedulable = true;
 
     /**
      * Enumeration of all the allowed commands.
@@ -94,6 +88,7 @@ public class FTP_Server implements Runnable {
         try {
 
 
+            System.out.println("Schedulable: " + isSchedulable + " :thread id: " + Long.toString(Thread.currentThread().getId()));
             Object inputObj = null;
             this.inputStreamObj = new ObjectInputStream(this.clientNormalPortSocket.getInputStream());
             if ((inputObj = this.inputStreamObj.readObject()) == null) {
@@ -171,6 +166,7 @@ public class FTP_Server implements Runnable {
             System.out.println("\n\nCommand received from Client: '" + this.clientCommand + "'");
             System.out.println("Parameters received from Client: '" + this.clientParams + "'");
 
+
         } catch (EOFException e) {
 
             System.out.println("Client exited!!!");
@@ -229,22 +225,60 @@ public class FTP_Server implements Runnable {
 
 
                 case put:
-                    if (this.currentCommandID == null) {
-                        this.currentFileName = (String) this.clientParams;
-                        commandResult = this.executePut((String) this.clientParams);
-                        this.clientOutputObj.writeObject(commandResult);
-                        this.clientOutputObj.flush();
-                        this.currentCommandID = commandResult;
+                    System.out.println("Schedulable: " + isSchedulable + " :thread id: " + Long.toString(Thread.currentThread().getId()));
+                    while (!isSchedulable) {
+                        System.out.println("Schedulable: " + isSchedulable + " :thread id: " + Long.toString(Thread.currentThread().getId()));
+
+                        Thread.currentThread().sleep(5000);
+                        System.out.println("Thread is waiting.....");
+
+                        if (isSchedulable) {
+                            break;
+                        }
                     }
-                    if (commandResult.length() <= 6) {
-                        this.readCommandFromClient();
-                        commandResult = this.executePut((String) this.clientParams);
+                    if (isSchedulable) {
+                        System.out.println("Schedulable: " + isSchedulable + " :thread id: " + Long.toString(Thread.currentThread().getId()));
+                        isSchedulable = false;
+                        if (this.currentCommandID == null) {
+                            this.currentFileName = (String) this.clientParams;
+                            commandResult = this.executePut((String) this.clientParams);
+                            this.clientOutputObj.writeObject(commandResult);
+                            this.clientOutputObj.flush();
+                            this.currentCommandID = commandResult;
+                        }
+                        if (commandResult.length() <= 6) {
+                            this.readCommandFromClient();
+                            commandResult = this.executePut((String) this.clientParams);
+                        }
+                        System.out.println(commandResult);
                     }
-                    System.out.println(commandResult);
                     break;
 
                 case get:
-                    this.executeGet((String) this.clientParams);
+                    System.out.println("Schedulable: " + isSchedulable + " :thread id: " + Long.toString(Thread.currentThread().getId()));
+                    while (!isSchedulable) {
+                        String existingKey=null;
+                        if((existingKey=this.getKeyFromValue((String)this.clientParams).toString())!=null)
+                        {
+                          String[] existingCommandIDArray = existingKey.toString().split("_");
+                          if(existingCommandIDArray[1].equals("1")){
+                                 isSchedulable = true;
+
+                             }else{
+                                 isSchedulable = false;
+                             }
+                        }
+                        System.out.println("Schedulable: " + isSchedulable + " :thread id: " + Long.toString(Thread.currentThread().getId()));
+                        Thread.currentThread().sleep(5000);
+                        System.out.println("Thread is waiting.....");
+                        if (isSchedulable) {
+                            break;
+                        }
+                    }
+                    if (isSchedulable) {
+                        isSchedulable = false;
+                        this.executeGet((String) this.clientParams);
+                    }
                     break;
 
                 case terminate:
@@ -399,7 +433,7 @@ public class FTP_Server implements Runnable {
      * @return String
      */
     public String executeDelete(String fileName) {
-        String commandID = this.currentThreadID + "_" + DELETE_COMMAND_ID;
+        this.currentCommandID = this.currentThreadID + "_" + DELETE_COMMAND_ID;
 
         System.out.println("Executing delete...");
         String result = null;
@@ -412,7 +446,7 @@ public class FTP_Server implements Runnable {
             result = "Directory / File does not exists!! Please try again.";
 
         } else if (fileObj.isFile()) {
-            if (this.isAllowed(fileName, commandID)) {
+            if (this.isAllowed(fileName, this.currentCommandID)) {
                 //If file exists, then delete the file
                 fileObj.delete();
                 result = "Directory / File has been deleted successfully.";
@@ -462,34 +496,25 @@ public class FTP_Server implements Runnable {
 
             //Implies the Client command has not been sent
             if (this.clientCommandObject[5] == null) {
-
                 this.currentCommandID = Long.toString(Thread.currentThread().getId()) + "_" + PUT_COMMAND_ID;
                 if (this.isAllowed(this.clientCommandObject[1].toString(), this.currentCommandID)) {
-                    writeLock.lock();
-                    try {
-                        filesLocked.put(this.currentCommandID, this.clientCommandObject[1].toString());
-                    } finally {
-                        writeLock.unlock();
-                    }
-
+                    this.pushToMap(this.currentCommandID, this.clientCommandObject[1].toString());
                     result = this.currentCommandID;
 
-                } else {
-                    result = "Please try again after sometime!!!!";
                 }
             } else {
 
+                this.currentCommandID = this.clientCommandObject[5].toString();
                 while (true && !isFileRecieved && !Thread.currentThread().isInterrupted()) {
 
                     if (!this.isTerminated(this.currentCommandID)) {
-
                         Thread.currentThread().sleep(1000);
                         System.out.println("File receiving.....");
 
                         FileOutputStream fileOutputStreamObject;
                         File f = new File(System.getProperty("user.dir") + "/" + this.clientCommandObject[1]);
                         if (f.exists()) {
-                            fileOutputStreamObject = new FileOutputStream(f, true);
+                            fileOutputStreamObject = new FileOutputStream(f, false);
                         } else {
                             fileOutputStreamObject = new FileOutputStream(f);
                         }
@@ -502,7 +527,7 @@ public class FTP_Server implements Runnable {
                         result = "File received successfully!!!";
                         isFileRecieved = true;
                         this.executeTerminate(this.currentCommandID);
-                        
+
                     } else {
                         System.out.println("Client sent terminate signal");
                         Thread.currentThread().interrupt();
@@ -540,7 +565,7 @@ public class FTP_Server implements Runnable {
         try {
 
             //Lakshat thev: To change it to 1000bytes
-            int FIXED_BUFFER_SIZE = 10;
+            int FIXED_BUFFER_SIZE = 1000;
 
             boolean commandIDSent = false;
             String result = null;
@@ -556,14 +581,7 @@ public class FTP_Server implements Runnable {
 
                 if (this.isAllowed(fileName, this.currentCommandID)) {
 
-                    writeLock.lock();
-                    try {
-                        filesLocked.put(this.currentCommandID, fileName);
-                    } finally {
-                        writeLock.unlock();
-                    }
-
-
+                    this.pushToMap(this.currentCommandID, fileName);
                     FileInputStream fileInputStreamObj = new FileInputStream(fileName);
                     int fsize = (int) fileInputStreamObj.getChannel().size();
 
@@ -670,17 +688,25 @@ public class FTP_Server implements Runnable {
     public boolean executeTerminate(String commandID) {
         boolean terminate = false;
 
-        writeLock.lock();
         try {
-            if (filesLocked.containsKey(commandID)) {
-                filesLocked.remove(commandID);
-                System.out.println("Command ID found!!!Removing corresponding thread from the map.");
-                terminate = true;
+            if (!isLocked) {
+
+                isLocked = true;
+                if (filesLocked.containsKey(commandID)) {
+                    filesLocked.remove(commandID);
+                    System.out.println("Command ID found!!!Removing corresponding thread from the map.");
+                    terminate = true;
+                    isSchedulable = true;
+                    System.out.println("Schedulable: " + isSchedulable + " :thread id: " + Long.toString(Thread.currentThread().getId()));
+
+
+                }
             }
         } catch (Exception e) {
         } finally {
 
-            writeLock.unlock();
+            isLocked = false;
+
         }
         // System.out.println("Is thread terminated: " + terminate);
         return terminate;
@@ -693,19 +719,19 @@ public class FTP_Server implements Runnable {
      * @return boolean
      */
     public boolean isTerminated(String commandID) {
-
         boolean terminated = false;
-        readLock.lock();
         try {
-
-            if (!filesLocked.containsKey(commandID)) {
-                terminated = true;
+            if (!isLocked) {
+                isLocked = true;
+                if (!filesLocked.containsKey(commandID)) {
+                    terminated = true;
+                }
             }
 
         } catch (Exception e) {
         } finally {
 
-            readLock.unlock();
+            isLocked = false;
         }
 
         //System.out.println("Terminate current status: " + terminated);
@@ -725,37 +751,62 @@ public class FTP_Server implements Runnable {
     public boolean isAllowed(String fileName, String inputCommand) {
         boolean allowed = false;
 
-        readLock.lock();
         try {
-            if (filesLocked.containsValue(fileName)) {
-                Object key = this.getKeyFromValue(fileName);
-                String[] existingCommandIDArray = key.toString().split("_");
-                String[] inputCommandIDArray = inputCommand.split("_");
-                if (existingCommandIDArray[1].equals(inputCommandIDArray[1]) && ((existingCommandIDArray[1].equals("1")) && (inputCommandIDArray[1].equals("1")))) {
+            if (!isLocked) {
+
+                isLocked = true;
+                if (filesLocked.containsValue(fileName)) {
+                    Object key = this.getKeyFromValue(fileName);
+                    String[] existingCommandIDArray = key.toString().split("_");
+                    String[] inputCommandIDArray = inputCommand.split("_");
+                    if (existingCommandIDArray[1].equals(inputCommandIDArray[1]) && ((existingCommandIDArray[1].equals("1")) && (inputCommandIDArray[1].equals("1")))) {
+                        allowed = true;
+                    }
+                } else {
                     allowed = true;
                 }
-            } else {
-                allowed = true;
+
             }
+
         } catch (Exception e) {
         } finally {
-            readLock.unlock();
+            isLocked = false;
         }
         // System.out.println("Is allowed: " + allowed);
         return allowed;
     }
 
-    public Object getKeyFromValue(String value) {
-        readLock.lock();
+    public void pushToMap(String commandID, String fileName) {
+
         try {
-            for (Object o : filesLocked.keySet()) {
-                if (filesLocked.get(o).equals(value)) {
-                    return o;
+            if (!isLocked) {
+                isLocked = true;
+                filesLocked.put(commandID, fileName);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            isLocked = false;
+        }
+
+
+    }
+
+    public Object getKeyFromValue(String value) {
+        try {
+
+            if (!isLocked) {
+
+                isLocked = true;
+                for (Object o : filesLocked.keySet()) {
+                    if (filesLocked.get(o).equals(value)) {
+                        return o;
+                    }
                 }
             }
         } catch (Exception e) {
         } finally {
-            readLock.unlock();
+            isLocked = false;
         }
         return null;
     }

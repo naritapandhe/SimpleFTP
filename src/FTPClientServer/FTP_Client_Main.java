@@ -27,6 +27,12 @@ public class FTP_Client_Main {
         Socket clientNormalPortSocket;
         Socket clientTerminatePortSocket;
 
+        public static HashMap<String, String> filesLocked;
+
+
+        FTP_Client_Main(){
+            filesLocked=new HashMap<String, String>();
+        }
 	
         //Default Client's constructor
 	FTP_Client_Main(String serverAddressParm, int serverNormalPortParm, int serverTerminatePortParm) {
@@ -53,23 +59,22 @@ public class FTP_Client_Main {
 
             try
             {
+                FTP_Client_Main ftpMain=new FTP_Client_Main();
                 
 		FTP_Client client=new FTP_Client(args[0],Integer.parseInt(args[1]),Integer.parseInt(args[2]));
-                
-                
                 System.out.println("Connecting to the server!!!!");
 
                 while(true){
 
                 Thread.currentThread().sleep(2000);
 
-                //Connect to the Server on Normal Port
-                client.clientNormalPortSocket = new Socket(client.serverAddress,client.serverNormalPort);
-                client.clientTerminatePortSocket = new Socket(client.serverAddress,client.serverTerminatePort);
-
+                
                 client.displayCommandsToUser();
                 client.readCommandFromUser();
 
+                //Connect to the Server on Normal Port
+                client.clientNormalPortSocket = new Socket(client.serverAddress,client.serverNormalPort);
+                client.clientTerminatePortSocket = new Socket(client.serverAddress,client.serverTerminatePort);
 
                     if(client.commandSplitArray[0].toString().equalsIgnoreCase("quit")){
 
@@ -101,5 +106,5 @@ public class FTP_Client_Main {
 
 	}
 
-
+        
 }
